@@ -222,6 +222,7 @@ button.chip:hover { border-color: var(--warn); }
 <div id="print-root"></div>
 <div class="toast" id="toast" hidden></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script>
 (function () {
   "use strict";
@@ -409,13 +410,13 @@ button.chip:hover { border-color: var(--warn); }
         out += '<p class="note">Green chips are on your resume. Add the amber ones where they are true for you, ideally inside achievement lines rather than only in Skills.</p>';
       }
       out += '<h2 class="section-h">Download</h2><div class="export-row">' +
-        '<button type="button" class="btn primary" data-act="print">Save as PDF</button>' +
-        '<button type="button" class="btn" data-act="doc">Download Word (.doc)</button>' +
+        '<button type="button" class="btn primary" data-act="pdf">Download PDF</button>' +
+        (inFrame() ? "" : '<button type="button" class="btn" data-act="doc">Download Word (.doc)</button>') +
         '<button type="button" class="btn" data-act="txt">Download plain text</button>' +
         '<button type="button" class="btn" data-act="copy">Copy text</button></div>';
-      out += '<p class="note" id="frame-note">' + (inFrame()
-        ? "This preview window blocks downloads and printing. Use Copy text here, or open the builder's own page (resume-builder/index.html) in your browser to save a PDF or Word file."
-        : "Save as PDF opens your browser's print dialog. Pick \"Save as PDF\" as the destination and turn off headers and footers.") + "</p>";
+      out += '<p class="note">' + (inFrame() && !dl
+        ? "Downloads are blocked in this view. Use Copy text, or open resume-builder/index.html in your browser."
+        : "The PDF uses real, selectable text in a single column, so applicant tracking systems can read every line. Send PDF unless the job post asks for Word.") + "</p>";
       out += '<h2 class="section-h">Plain-text version</h2><p class="note" style="margin-top:-4px">Paste this into online application forms that ask you to type your resume.</p>' +
         '<textarea id="plain" readonly class="tall" style="margin-top:8px;font-family:var(--font-mono);font-size:12.5px">' + esc(plainText()) + "</textarea>";
       return out;
@@ -696,7 +697,7 @@ button.chip:hover { border-color: var(--warn); }
       "</div>";
   }
   function renderPreview() {
-    $("paper").innerHTML = renderResume(false);
+    $("paper").innerHTML = $("print-root").innerHTML = renderResume(false);
     $("f-style-font").value = state.style.font;
     var a = analyze();
     $("score-num").textContent = a.score;
@@ -723,9 +724,23 @@ button.chip:hover { border-color: var(--warn); }
     clearTimeout(toast.t); toast.t = setTimeout(function () { t.hidden = true; }, 2600);
   }
   function fileName(ext) { return ((state.contact.name || "Resume").trim().replace(/[^A-Za-z0-9]+/g, "_") + "_Resume." + ext); }
+  // inside the hosted viewer, files go through its save prompt; elsewhere a normal browser download
+  var dl = null;
+  try {
+    if (window.claude && window.claude.use) window.claude.use("downloads").then(function (d) {
+      dl = d; if (d && STEPS[state.step].id === "review") renderCard();
+    }, function () {});
+  } catch (e) {}
   function download(content, type, name) {
+    if (dl) {
+      dl.save({ filename: name, data: content instanceof Blob ? content : new Blob([content], { type: type }) }).then(function () { toast("Saved " + name); }, function (err) {
+        if (!err || err.code !== "declined") toast("Could not save the file here. Use Copy text instead.");
+      });
+      return;
+    }
+    if (inFrame()) { toast("Downloads are blocked in this view. Use Copy text instead."); return; }
     try {
-      var url = URL.createObjectURL(new Blob([content], { type: type }));
+      var url = URL.createObjectURL(content instanceof Blob ? content : new Blob([content], { type: type }));
       var a = document.createElement("a"); a.href = url; a.download = name;
       document.body.appendChild(a); a.click(); a.remove();
       setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
@@ -733,6 +748,104 @@ button.chip:hover { border-color: var(--warn); }
     } catch (e) { toast("Download is blocked here. Use Copy text instead."); }
   }
   var DOC_CSS = "body{font-family:" + "Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35;color:#000}h1{font-size:20pt;margin:0}h2{font-size:11pt;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #999;margin:14pt 0 4pt}p{margin:0 0 3pt}ul{margin:2pt 0 6pt}li{margin:0 0 2pt}.r-contact{color:#333}";
+
+  /* ---------- PDF: drawn as real text so an ATS can parse it ---------- */
+  function buildPdf() {
+    var s = state, c = s.contact;
+    var doc = new window.jspdf.jsPDF({ unit: "pt", format: "letter" });
+    var F = /Georgia|Garamond/.test(s.style.font) ? "times" : "helvetica";
+    var M = 50, R = 612 - M, TOP = 54, BOTTOM = 792 - 48, maxW = R - M, BASE = 10.5, LH = 1.32;
+    var y = TOP;
+    doc.setProperties({ title: (c.name || "Resume") + " Resume", author: c.name || "" });
+    function set(size, bold, gray) { doc.setFont(F, bold ? "bold" : "normal"); doc.setFontSize(size); doc.setTextColor(gray || 0); }
+    function ensure(h) { if (y + h > BOTTOM) { doc.addPage(); y = TOP; } }
+    // bold lead-in followed by normal text, wrapped across lines
+    function rich(bold, rest, indent, size) {
+      size = size || BASE; indent = indent || 0;
+      var x0 = M + indent, w = maxW - indent, h = size * LH;
+      set(size, true); var bw = bold ? doc.getTextWidth(bold) : 0;
+      set(size, false);
+      var ws = String(rest || "").split(/\s+/).filter(Boolean), line = "", first = true, lines = [];
+      ws.forEach(function (wd) {
+        var cand = line ? line + " " + wd : wd;
+        if (doc.getTextWidth(cand) > w - (first ? bw : 0) && line) { lines.push(line); line = wd; first = false; }
+        else line = cand;
+      });
+      if (line || !lines.length) lines.push(line);
+      lines.forEach(function (l, i) {
+        ensure(h);
+        if (i === 0 && bold) { set(size, true); doc.text(bold, x0, y); set(size, false); doc.text(l, x0 + bw, y); }
+        else doc.text(l, x0, y);
+        y += h;
+      });
+    }
+    function heading(t) {
+      ensure(40); y += 9;
+      set(BASE, true); doc.text(t.toUpperCase(), M, y, { charSpace: 0.8 });
+      doc.setDrawColor(150); doc.setLineWidth(0.6); doc.line(M, y + 4, R, y + 4);
+      y += BASE * LH + 5;
+    }
+    function row(boldPart, rest, right) {
+      var h = BASE * LH;
+      set(BASE, false); var rw = right ? doc.getTextWidth(right) : 0;
+      set(BASE, true); var bw = doc.getTextWidth(boldPart);
+      set(BASE, false); var restW = doc.getTextWidth(rest);
+      ensure(h * 2);
+      if (bw + restW + rw + 14 <= maxW) {
+        set(BASE, true); doc.text(boldPart, M, y); set(BASE, false); doc.text(rest, M + bw, y);
+        if (right) doc.text(right, R, y, { align: "right" });
+        y += h;
+      } else {
+        set(BASE, true); doc.text(doc.splitTextToSize(boldPart, maxW - rw - 14)[0], M, y);
+        set(BASE, false); if (right) doc.text(right, R, y, { align: "right" });
+        y += h;
+        if (rest) rich("", rest.replace(/^,\s*/, ""));
+      }
+    }
+    function bullets(list) {
+      list.forEach(function (b) {
+        ensure(BASE * LH); set(BASE, false); doc.text("•", M + 4, y);
+        rich("", b, 16);
+        y += 1;
+      });
+    }
+
+    set(20, true); doc.text(c.name || "Your Name", M, y + 6); y += 26;
+    var hl = c.headline || s.target.role;
+    if (hl) { set(11, false); doc.text(hl, M, y); y += 15; }
+    var cb = contactBits();
+    if (cb.length) { set(9.5, false, 60); doc.splitTextToSize(cb.join(" | "), maxW).forEach(function (l) { doc.text(l, M, y); y += 12.5; }); }
+    doc.setTextColor(0);
+
+    if (s.summary.trim()) { heading("Summary"); rich("", s.summary.trim()); }
+    var jobs = s.experience.filter(function (j) { return j.title || j.company || j.bullets; });
+    if (jobs.length) {
+      heading("Experience");
+      jobs.forEach(function (j, i) {
+        if (i) y += 5;
+        row(j.title || "Job title", (j.company ? ", " + j.company : "") + (j.location ? " — " + j.location : ""), dateRange(j));
+        bullets(lines(j.bullets));
+      });
+    }
+    var sk = lines(s.skills);
+    if (sk.length) {
+      heading("Skills");
+      sk.forEach(function (l) { var m = l.match(/^([^:]{1,40}):\s*(.+)$/); if (m) rich(m[1] + ": ", m[2]); else rich("", l); y += 1; });
+    }
+    var edu = s.education.filter(function (e) { return e.degree || e.school; });
+    if (edu.length) {
+      heading("Education");
+      edu.forEach(function (e, i) {
+        if (i) y += 4;
+        row(e.degree || e.school, (e.degree && e.school ? ", " + e.school : "") + (e.location ? " — " + e.location : ""), e.year || "");
+        if (e.details) rich("", e.details);
+      });
+    }
+    if (lines(s.certs).length) { heading("Certifications"); bullets(lines(s.certs)); }
+    if (lines(s.awards).length) { heading("Awards"); bullets(lines(s.awards)); }
+    if (s.languages.trim()) { heading("Languages"); rich("", s.languages.trim()); }
+    return doc.output("blob");
+  }
 
   /* ---------- events ---------- */
   document.addEventListener("input", function (e) {
@@ -777,10 +890,9 @@ button.chip:hover { border-color: var(--warn); }
         if (Date.now() - blankArm > 4000) { blankArm = Date.now(); b.textContent = "Click again to erase everything"; return; }
         state = blank(); break;
       case "example": state = example(); break;
-      case "print":
-        $("print-root").innerHTML = renderResume(false);
-        try { window.print(); } catch (err) {}
-        if (inFrame()) toast("Printing is blocked in this preview. Open resume-builder/index.html directly.");
+      case "pdf":
+        if (!window.jspdf) { toast("The PDF tool did not load. Check your connection and reload."); return; }
+        try { download(buildPdf(), "application/pdf", fileName("pdf")); } catch (err) { toast("Could not build the PDF: " + err.message); }
         return;
       case "doc":
         download("<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><title>" +
