@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shortlist Resume Builder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: guided form on the left, a live letter-size resume on the right; the ATS score rides in the header. */
+:root {
+  --bg: #EEF1F4; --surface: #FFFFFF; --ink: #15202B; --muted: #5B6773; --line: #D3DAE1;
+  --accent: #0E6B57; --accent-ink: #FFFFFF; --accent-soft: #DCEFE9;
+  --warn: #9A5300; --warn-soft: #FBEBD5; --bad: #B42318; --bad-soft: #FBE3E1;
+  --paper: #FFFFFF; --paper-ink: #111111; --paper-muted: #444444; --paper-line: #999999;
+  --shadow: 0 1px 2px rgba(20,30,40,.08), 0 10px 28px rgba(20,30,40,.10);
+  --font-display: "Fraunces", Georgia, serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0F1519; --surface: #172026; --ink: #E6ECF0; --muted: #97A5B0; --line: #2C3943;
+    --accent: #4FC3A1; --accent-ink: #06231B; --accent-soft: #163A31;
+    --warn: #F0B35A; --warn-soft: #3A2C15; --bad: #F2877B; --bad-soft: #3D1D1A;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.45);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0F1519; --surface: #172026; --ink: #E6ECF0; --muted: #97A5B0; --line: #2C3943;
+  --accent: #4FC3A1; --accent-ink: #06231B; --accent-soft: #163A31;
+  --warn: #F0B35A; --warn-soft: #3A2C15; --bad: #F2877B; --bad-soft: #3D1D1A;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 28px rgba(0,0,0,.45);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 var(--font-body); }
+button, input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.topbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+.topbar-in { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1500px; margin: 0 auto; }
+.brand { display: flex; align-items: baseline; gap: 10px; margin-right: auto; }
+.brand b { font: 600 22px/1 var(--font-display); letter-spacing: -.01em; }
+.brand span { color: var(--muted); font-size: 13px; }
+.score { display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px 4px 4px; background: var(--bg); cursor: pointer; }
+.score-num { font: 500 13px/1 var(--font-mono); min-width: 34px; height: 26px; display: grid; place-items: center; border-radius: 999px; color: var(--accent-ink); background: var(--accent); font-variant-numeric: tabular-nums; }
+.score[data-level="warn"] .score-num { background: var(--warn); color: var(--surface); }
+.score[data-level="bad"] .score-num { background: var(--bad); color: var(--surface); }
+.score small { font-size: 13px; color: var(--muted); }
+.tabs { display: none; gap: 4px; background: var(--bg); padding: 3px; border-radius: 8px; border: 1px solid var(--line); }
+.tabs button { border: 0; background: transparent; padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+.tabs button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.12); font-weight: 600; }
+
+.layout { max-width: 1500px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); gap: 28px; align-items: start;
+  padding-block: 24px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.editor, .preview-col { min-width: 0; }
+
+.banner { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; background: var(--accent-soft); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px; font-size: 14px; }
+.banner p { margin: 0; flex: 1 1 220px; }
+
+.steps { list-style: none; display: flex; gap: 6px; padding: 0; margin: 0 0 16px; overflow-x: auto; scrollbar-width: thin; }
+.steps button { display: flex; align-items: center; gap: 6px; white-space: nowrap; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 11px 4px 5px; cursor: pointer; font-size: 13px; color: var(--muted); }
+.steps .n { font: 500 11px/1 var(--font-mono); width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--bg); color: var(--muted); }
+.steps button.done .n { background: var(--accent-soft); color: var(--accent); }
+.steps button[aria-current="step"] { border-color: var(--accent); color: var(--ink); font-weight: 600; }
+.steps button[aria-current="step"] .n { background: var(--accent); color: var(--accent-ink); }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 22px; }
+.q-eyebrow { font: 500 11px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+.q-title { font: 600 26px/1.15 var(--font-display); margin: 0 0 6px; text-wrap: balance; letter-spacing: -.01em; }
+.q-lead { color: var(--muted); margin: 0 0 18px; max-width: 60ch; }
+.fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.fields .full { grid-column: 1 / -1; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field label, .lbl { font-size: 13px; font-weight: 600; }
+.field .hint { font-size: 12.5px; color: var(--muted); }
+input[type="text"], input[type="email"], input[type="tel"], textarea, select {
+  width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--bg); }
+input:focus, textarea:focus, select:focus { border-color: var(--accent); background: var(--surface); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+input:disabled { opacity: .55; }
+textarea { resize: vertical; min-height: 90px; line-height: 1.45; }
+textarea.tall { min-height: 170px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+
+.entry { border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 14px; background: var(--surface); }
+.entry + .entry { margin-top: 14px; }
+.entry > *, .card { min-width: 0; }
+.entry-head { display: flex; align-items: center; gap: 8px; }
+.entry-head strong { font-size: 14px; margin-right: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 14px; cursor: pointer; font-weight: 500; font-size: 14px; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 4px 8px; font-size: 13px; }
+.btn.ghost:hover { color: var(--ink); background: var(--bg); }
+.btn.danger { color: var(--bad); }
+.btn.small { padding: 5px 10px; font-size: 13px; }
+.navrow { display: flex; justify-content: space-between; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); }
+.addrow { margin-top: 14px; }
+
+.tip { background: var(--bg); border-radius: 8px; padding: 10px 12px; font-size: 13.5px; color: var(--muted); margin-top: 16px; }
+.tip b { color: var(--ink); }
+.feedback { display: grid; gap: 4px; font-size: 12.5px; }
+.fb { display: flex; gap: 8px; align-items: baseline; }
+.fb::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); transform: translateY(-1px); }
+.fb.warn::before { background: var(--warn); }
+.fb.bad::before { background: var(--bad); }
+.fb span { color: var(--muted); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12.5px; border-radius: 999px; padding: 3px 10px; border: 1px solid var(--line); background: var(--surface); }
+.chip.hit { background: var(--accent-soft); border-color: transparent; color: var(--ink); }
+.chip.miss { background: var(--warn-soft); border-color: transparent; }
+button.chip { cursor: pointer; }
+button.chip:hover { border-color: var(--warn); }
+
+.checks { list-style: none; padding: 0; margin: 0; display: grid; gap: 2px; }
+.checks li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.checks li:last-child { border-bottom: 0; }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font: 600 12px/1 var(--font-mono); background: var(--accent-soft); color: var(--accent); }
+.mark.warn { background: var(--warn-soft); color: var(--warn); }
+.mark.bad { background: var(--bad-soft); color: var(--bad); }
+.mark.info { background: var(--bg); color: var(--muted); }
+.checks p { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+.section-h { font: 600 15px/1.3 var(--font-body); margin: 22px 0 10px; }
+.export-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+.toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 16px; border-radius: 8px; font-size: 14px; z-index: 20; }
+
+/* preview */
+.preview-col { position: sticky; top: calc(70px + env(safe-area-inset-top, 0px)); }
+.preview-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+.preview-bar select { width: auto; padding: 4px 8px; font-size: 13px; }
+.preview-bar .grow { margin-right: auto; }
+.paper-wrap { max-height: calc(100vh - 140px); overflow: auto; border-radius: 4px; }
+.paper { background: var(--paper); color: var(--paper-ink); box-shadow: var(--shadow); max-width: 816px; margin: 0 auto; padding: 48px 56px; min-height: 600px; }
+
+/* the resume itself: single column, standard headings, real text */
+.resume { font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; line-height: 1.38; color: var(--paper-ink); }
+.resume[data-font="Calibri"] { font-family: Calibri, Carlito, "Segoe UI", Arial, sans-serif; font-size: 11pt; }
+.resume[data-font="Georgia"] { font-family: Georgia, "Times New Roman", serif; }
+.resume[data-font="Garamond"] { font-family: Garamond, "EB Garamond", "Times New Roman", serif; font-size: 11.5pt; }
+.resume h1 { font-size: 20pt; line-height: 1.1; margin: 0 0 2px; font-weight: 700; letter-spacing: .01em; }
+.resume .r-head { font-size: 11pt; margin: 0 0 4px; }
+.resume .r-contact { margin: 0; color: var(--paper-muted); font-size: 9.5pt; overflow-wrap: anywhere; }
+.resume h2 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: .08em; font-weight: 700; margin: 14px 0 6px; padding-bottom: 2px; border-bottom: 1px solid var(--paper-line); }
+.resume p { margin: 0 0 4px; }
+.resume .r-job { margin: 0 0 9px; break-inside: avoid; }
+.resume .r-row { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.resume .r-row span:last-child { white-space: nowrap; }
+.resume ul { margin: 3px 0 0; padding-left: 18px; }
+.resume li { margin: 0 0 2px; }
+.resume .r-empty { color: var(--paper-muted); font-style: italic; }
+
+@media (max-width: 999px) {
+  .layout { grid-template-columns: minmax(0, 1fr); }
+  .tabs { display: flex; }
+  body[data-view="edit"] .preview-col { display: none; }
+  body[data-view="preview"] .editor { display: none; }
+  .preview-col { position: static; }
+  .paper-wrap { max-height: none; }
+}
+@media (max-width: 560px) {
+  .fields { grid-template-columns: minmax(0, 1fr); }
+  .card { padding: 16px; }
+  .paper { padding: 26px 20px; }
+  .brand span { display: none; }
+  .q-title { font-size: 22px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .card { animation: rise .22s ease-out; }
+  @keyframes rise { from { transform: translateY(4px); } to { transform: none; } }
+}
+#print-root { display: none; }
+@media print {
+  @page { size: letter; margin: 0.55in 0.6in; }
+  body { background: #fff; }
+  body::before, .topbar, .layout, .toast { display: none !important; }
+  #print-root { display: block !important; }
+  #print-root .resume { color: #000; }
+}
+</style>
+</head>
+<body data-view="edit">
+<header class="topbar">
+  <div class="topbar-in">
+    <div class="brand"><b>Shortlist</b><span>ATS-friendly resume builder</span></div>
+    <div class="tabs" role="group" aria-label="View">
+      <button type="button" data-act="view" data-arg="edit" aria-pressed="true">Edit</button>
+      <button type="button" data-act="view" data-arg="preview" aria-pressed="false">Preview</button>
+    </div>
+    <button type="button" class="score" id="score" data-act="goto" data-arg="7" title="Open the ATS check">
+      <span class="score-num" id="score-num">0</span><small>ATS score</small>
+    </button>
+  </div>
+</header>
+
+<main class="layout">
+  <section class="editor" aria-label="Resume questions">
+    <div id="banner"></div>
+    <ol class="steps" id="steps"></ol>
+    <div class="card" id="card"></div>
+  </section>
+  <section class="preview-col" aria-label="Resume preview">
+    <div class="preview-bar">
+      <span class="grow" id="pages">Live preview</span>
+      <label for="f-style-font">Font</label>
+      <select id="f-style-font" data-bind="style.font">
+        <option>Arial</option><option>Calibri</option><option>Georgia</option><option>Garamond</option>
+      </select>
+    </div>
+    <div class="paper-wrap"><div class="paper" id="paper"></div></div>
+  </section>
+</main>
+<div id="print-root"></div>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  var KEY = "shortlist-resume-v1";
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  var STEPS = [
+    { id: "target", label: "Target job" },
+    { id: "contact", label: "Contact" },
+    { id: "experience", label: "Experience" },
+    { id: "skills", label: "Skills" },
+    { id: "education", label: "Education" },
+    { id: "extras", label: "Certifications" },
+    { id: "summary", label: "Summary" },
+    { id: "review", label: "Check & export" }
+  ];
+
+  function newJob() { return { title: "", company: "", location: "", start: "", end: "", current: false, bullets: "" }; }
+  function newEdu() { return { degree: "", school: "", location: "", year: "", details: "" }; }
+  function blank() {
+    return {
+      target: { role: "", years: "", jd: "" },
+      contact: { name: "", headline: "", email: "", phone: "", location: "", linkedin: "", website: "" },
+      summary: "", experience: [newJob()], skills: "", education: [newEdu()],
+      certs: "", languages: "", awards: "", style: { font: "Arial" }, isExample: false, step: 0
+    };
+  }
+  function example() {
+    var s = blank();
+    s.isExample = true;
+    s.target = { role: "Senior Amazon Advertising Manager", years: "7",
+      jd: "We are hiring a Senior Amazon Advertising Manager to own Amazon Ads strategy across Sponsored Products, Sponsored Brands, Sponsored Display and Amazon DSP. You will manage a multi-million dollar advertising budget, drive bid optimization and keyword research, and improve ACoS, TACoS and ROAS across our catalog.\n\nRequirements:\n- 5+ years managing Amazon PPC campaigns for consumer brands\n- Deep knowledge of Seller Central and Vendor Central\n- Experience with Helium 10, Pacvue or similar tools\n- Advanced Excel; Power BI or Tableau a plus\n- Experience with Amazon Marketing Cloud and retail media reporting\n- Proven track record of profitable growth and budget management\n- Strong cross-functional communication with brand, creative and supply chain teams\n- A/B testing of creatives and listing optimization" };
+    s.contact = { name: "Jordan Lee", headline: "Senior Amazon Advertising Manager", email: "jordan.lee@email.com", phone: "(206) 555-0142",
+      location: "Seattle, WA", linkedin: "linkedin.com/in/jordanlee-example", website: "" };
+    s.experience = [
+      { title: "Senior Amazon Advertising Manager", company: "Northbeam Brands", location: "Seattle, WA", start: "Mar 2022", end: "", current: true,
+        bullets: "Managed a $4.2M annual Amazon Ads budget across Sponsored Products, Sponsored Brands and Sponsored Display for 140 ASINs in the US, CA and UK marketplaces\nCut ACoS from 34% to 22% in 6 months by restructuring 300+ campaigns into exact, phrase and broad tiers with weekly bid optimization\nGrew ad-attributed sales 58% YoY to $11.8M while holding TACoS under 9%\nBuilt a search term harvesting and negative keyword process that removed $38K of wasted spend per month\nLaunched 22 new ASINs with a keyword ranking playbook; 15 reached page one for their top 3 keywords within 45 days" },
+      { title: "Amazon PPC Specialist", company: "Crestline Commerce", location: "Portland, OR", start: "Jun 2019", end: "Feb 2022", current: false,
+        bullets: "Ran PPC for 12 Seller Central brands with combined monthly ad spend of $310K\nRaised average ROAS from 3.1 to 4.6 using dayparting, placement modifiers and automated bid rules in Helium 10 Adtomic\nCreated Excel and Power BI dashboards used in weekly client performance reviews" },
+      { title: "Marketing Coordinator", company: "Brightway Outdoors", location: "Portland, OR", start: "Aug 2017", end: "May 2019", current: false,
+        bullets: "Wrote A+ Content and listing copy for 60 products, lifting average conversion rate 12%\nResponsible for social media posting" }
+    ];
+    s.skills = "Amazon Advertising: Sponsored Products, Sponsored Brands, Sponsored Display, Amazon DSP\nPPC Optimization: Bid Optimization, Keyword Research, Search Term Harvesting, Negative Keywords, Dayparting\nTools: Helium 10, Pacvue, Seller Central, Excel (Pivot Tables, XLOOKUP), Power BI\nMetrics: ACoS, TACoS, ROAS, CTR, CVR, Share of Voice";
+    s.education = [{ degree: "B.S. Marketing", school: "University of Oregon", location: "Eugene, OR", year: "2017", details: "" }];
+    s.certs = "Amazon Ads Sponsored Products Certification, 2024\nAmazon DSP Certification, 2023";
+    s.languages = "English (native), Spanish (professional)";
+    s.awards = "";
+    s.summary = "Senior Amazon advertising manager with 7+ years of experience running Sponsored Products, Sponsored Brands and Sponsored Display for consumer brands. Most recently cut ACoS from 34% to 22% while growing ad-attributed sales 58% YoY on a $4.2M budget. Skilled in bid optimization, keyword research, Helium 10 and Excel reporting.";
+    return s;
+  }
+
+  var state;
+  try { state = JSON.parse(localStorage.getItem(KEY) || "null"); } catch (e) { state = null; }
+  if (!state || typeof state !== "object") state = example();
+  state = Object.assign(blank(), state);
+  if (!state.experience.length) state.experience.push(newJob());
+  if (!state.education.length) state.education.push(newEdu());
+
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+  function getPath(o, p) { return p.split(".").reduce(function (a, k) { return a == null ? a : a[k]; }, o); }
+  function setPath(o, p, v) {
+    var ks = p.split("."), last = ks.pop();
+    var t = ks.reduce(function (a, k) { return a[k]; }, o);
+    t[last] = v;
+  }
+  function lines(s) { return String(s || "").split(/\n+/).map(function (l) { return l.replace(/^\s*[-•*·]\s*/, "").trim(); }).filter(Boolean); }
+  function words(s) { return (String(s || "").match(/\S+/g) || []).length; }
+  function $(id) { return document.getElementById(id); }
+
+  /* ---------- form building ---------- */
+  function fid(path) { return "f-" + path.replace(/\./g, "-"); }
+  function field(label, path, o) {
+    o = o || {};
+    var v = getPath(state, path); v = v == null ? "" : v;
+    var id = fid(path);
+    var ctl = o.area
+      ? '<textarea id="' + id + '" data-bind="' + path + '" class="' + (o.tall ? "tall" : "") + '" placeholder="' + esc(o.ph || "") + '">' + esc(v) + "</textarea>"
+      : '<input id="' + id + '" type="' + (o.type || "text") + '" data-bind="' + path + '" value="' + esc(v) + '" placeholder="' + esc(o.ph || "") + '"' + (o.disabled ? " disabled" : "") + ">";
+    return '<div class="field' + (o.full ? " full" : "") + '"><label for="' + id + '">' + esc(label) + "</label>" + ctl +
+      (o.hint ? '<span class="hint">' + o.hint + "</span>" : "") + (o.after || "") + "</div>";
+  }
+  function head(eyebrow, title, lead) {
+    return '<p class="q-eyebrow">' + esc(eyebrow) + '</p><h1 class="q-title">' + esc(title) + '</h1><p class="q-lead">' + lead + "</p>";
+  }
+
+  var VIEWS = {
+    target: function () {
+      return head("Step 1 of 8", "What job are you going after?",
+        "Your target role shapes the headline and summary. Pasting a real job post lets the checker compare your resume against the words the ATS will scan for.") +
+        '<div class="fields">' +
+        field("Target job title", "target.role", { ph: "e.g. Senior PPC Manager" }) +
+        field("Years of relevant experience", "target.years", { ph: "e.g. 6" }) +
+        field("Job description (optional, strongly recommended)", "target.jd", { area: true, tall: true, full: true, ph: "Paste the full job post here", hint: "Stays in your browser. It is never sent anywhere." }) +
+        "</div>" + '<div class="tip"><b>Tip:</b> tailor one resume per application. Mirror the exact title and tool names from the post when they are true for you.</div>';
+    },
+    contact: function () {
+      return head("Step 2 of 8", "How should employers reach you?",
+        "Keep contact details in the body of the page as plain text. Many ATS parsers skip headers, footers, icons and images.") +
+        '<div class="fields">' +
+        field("Full name", "contact.name", { ph: "First Last" }) +
+        field("Headline", "contact.headline", { ph: state.target.role || "Your professional title", hint: "Usually your target job title." }) +
+        field("Email", "contact.email", { type: "email", ph: "name@email.com" }) +
+        field("Phone", "contact.phone", { type: "tel", ph: "(555) 555-0100" }) +
+        field("City, State / Country", "contact.location", { ph: "Austin, TX", hint: "City and region is enough. Skip your street address." }) +
+        field("LinkedIn URL", "contact.linkedin", { ph: "linkedin.com/in/yourname" }) +
+        field("Website or portfolio (optional)", "contact.website", { full: true, ph: "yoursite.com" }) +
+        "</div>";
+    },
+    experience: function () {
+      var out = head("Step 3 of 8", "Where have you worked?",
+        "Most recent job first. Write one achievement per line: <b>action verb + what you did + measurable result</b>.");
+      state.experience.forEach(function (j, i) {
+        var p = "experience." + i + ".";
+        out += '<div class="entry"><div class="entry-head"><strong>' + esc(j.title || "Job " + (i + 1)) + (j.company ? " · " + esc(j.company) : "") + "</strong>" +
+          (i > 0 ? '<button type="button" class="btn ghost" data-act="up-job" data-arg="' + i + '" aria-label="Move up">Move up</button>' : "") +
+          (state.experience.length > 1 ? '<button type="button" class="btn ghost danger" data-act="del-job" data-arg="' + i + '">Remove</button>' : "") +
+          '</div><div class="fields">' +
+          field("Job title", p + "title", { ph: "PPC Manager" }) +
+          field("Company", p + "company", { ph: "Company name" }) +
+          field("Start", p + "start", { ph: "Mar 2022" }) +
+          field("End", p + "end", { ph: j.current ? "Present" : "Jun 2024", disabled: j.current,
+            after: '<label class="check"><input type="checkbox" id="' + fid(p + "current") + '" data-bind="' + p + 'current"' + (j.current ? " checked" : "") + "> I work here now</label>" }) +
+          field("Location", p + "location", { full: true, ph: "City, State or Remote" }) +
+          field("Achievements (one per line)", p + "bullets", { area: true, tall: true, full: true,
+            ph: "Cut ACoS from 35% to 24% in 4 months by restructuring 120 campaigns by match type",
+            after: '<div class="feedback" id="fb-' + i + '">' + bulletFeedback(j.bullets) + "</div>" }) +
+          "</div></div>";
+      });
+      out += '<div class="addrow"><button type="button" class="btn" data-act="add-job">Add another job</button></div>';
+      out += '<div class="tip"><b>Strong verbs:</b> Grew, Cut, Launched, Built, Scaled, Negotiated, Automated, Led, Reduced, Increased, Optimized, Delivered. Aim for 3 to 6 lines per role and a number in most of them.</div>';
+      return out;
+    },
+    skills: function () {
+      return head("Step 4 of 8", "Which skills and tools do you bring?",
+        "Group them by category, one category per line. Use the exact spelling employers use, such as <b>Excel</b>, not <b>MS spreadsheets</b>.") +
+        '<div class="fields">' +
+        field("Skills", "skills", { area: true, tall: true, full: true, ph: "Advertising: Sponsored Products, Sponsored Brands\nTools: Helium 10, Excel, Power BI" }) +
+        "</div>" + '<div id="kw-skills">' + kwSuggest() + "</div>";
+    },
+    education: function () {
+      var out = head("Step 5 of 8", "What is your education?", "Degree, school and graduation year. Add details like honors or a relevant thesis only if they help for this job.");
+      state.education.forEach(function (e, i) {
+        var p = "education." + i + ".";
+        out += '<div class="entry"><div class="entry-head"><strong>' + esc(e.degree || "Education " + (i + 1)) + "</strong>" +
+          (state.education.length > 1 ? '<button type="button" class="btn ghost danger" data-act="del-edu" data-arg="' + i + '">Remove</button>' : "") +
+          '</div><div class="fields">' +
+          field("Degree and field", p + "degree", { ph: "B.S. Business Administration" }) +
+          field("School", p + "school", { ph: "University name" }) +
+          field("Location", p + "location", { ph: "City, State" }) +
+          field("Graduation year", p + "year", { ph: "2018" }) +
+          field("Details (optional)", p + "details", { full: true, ph: "GPA 3.8, Dean's List" }) +
+          "</div></div>";
+      });
+      return out + '<div class="addrow"><button type="button" class="btn" data-act="add-edu">Add another</button></div>';
+    },
+    extras: function () {
+      return head("Step 6 of 8", "Certifications, languages and awards",
+        "These are optional. Certifications matter a lot to ATS filters when the job post names them.") +
+        '<div class="fields">' +
+        field("Certifications (one per line)", "certs", { area: true, full: true, ph: "Amazon Ads Sponsored Products Certification, 2024" }) +
+        field("Languages", "languages", { full: true, ph: "English (native), Urdu (fluent)" }) +
+        field("Awards (one per line)", "awards", { area: true, full: true, ph: "Seller of the Year, 2023" }) +
+        "</div>";
+    },
+    summary: function () {
+      return head("Step 7 of 8", "Sum it up in three sentences",
+        "Recruiters read this first. Say who you are, your biggest result, and the skills that match this job. Write it without \"I\" or \"my\".") +
+        '<div class="fields">' +
+        field("Professional summary", "summary", { area: true, tall: true, full: true, ph: "Amazon PPC manager with 6+ years of experience...",
+          after: '<span class="hint" id="sum-count">' + words(state.summary) + " words · aim for 40 to 90</span>" }) +
+        '</div><div class="addrow"><button type="button" class="btn" data-act="draft">Draft one from my answers</button></div>' +
+        '<p class="note">The draft replaces what is in the box. Edit it so it sounds like you.</p>';
+    },
+    review: function () {
+      var a = analyze();
+      var out = head("Step 8 of 8", "Check and export", "Fix the red and amber items, then download. Each item links back to the step that fixes it.");
+      out += '<ul class="checks">' + a.checks.map(function (c) {
+        var sym = c.level === "ok" ? "✓" : c.level === "info" ? "i" : "!";
+        return '<li><span class="mark ' + c.level + '">' + sym + "</span><div><strong>" + esc(c.title) + "</strong>" +
+          (c.detail ? "<p>" + c.detail + (c.step != null && c.level !== "ok" ? ' <button type="button" class="btn ghost small" data-act="goto" data-arg="' + c.step + '">Fix</button>' : "") + "</p>" : "") + "</div></li>";
+      }).join("") + "</ul>";
+      if (a.kw.all.length) {
+        out += '<h2 class="section-h">Keywords from the job post (' + a.kw.hit.length + " of " + a.kw.all.length + " found)</h2>";
+        out += '<div class="chips">' + a.kw.all.map(function (k) { return '<span class="chip ' + (a.kw.hit.indexOf(k) >= 0 ? "hit" : "miss") + '">' + esc(k) + "</span>"; }).join("") + "</div>";
+        out += '<p class="note">Green chips are on your resume. Add the amber ones where they are true for you, ideally inside achievement lines rather than only in Skills.</p>';
+      }
+      out += '<h2 class="section-h">Download</h2><div class="export-row">' +
+        '<button type="button" class="btn primary" data-act="print">Save as PDF</button>' +
+        '<button type="button" class="btn" data-act="doc">Download Word (.doc)</button>' +
+        '<button type="button" class="btn" data-act="txt">Download plain text</button>' +
+        '<button type="button" class="btn" data-act="copy">Copy text</button></div>';
+      out += '<p class="note" id="frame-note">' + (inFrame()
+        ? "This preview window blocks downloads and printing. Use Copy text here, or open the builder's own page (resume-builder/index.html) in your browser to save a PDF or Word file."
+        : "Save as PDF opens your browser's print dialog. Pick \"Save as PDF\" as the destination and turn off headers and footers.") + "</p>";
+      out += '<h2 class="section-h">Plain-text version</h2><p class="note" style="margin-top:-4px">Paste this into online application forms that ask you to type your resume.</p>' +
+        '<textarea id="plain" readonly class="tall" style="margin-top:8px;font-family:var(--font-mono);font-size:12.5px">' + esc(plainText()) + "</textarea>";
+      return out;
+    }
+  };
+
+  function inFrame() { try { return window.self !== window.top; } catch (e) { return true; } }
+
+  /* ---------- analysis ---------- */
+  var WEAK = /^(responsible|responsibilities|helped|help|assisted|worked|working|handled|duties|tasked|involved|participated|was|were|i|my|me|did|in charge|tried|various)\b/i;
+  var PRONOUN = /\b(I|my|me|myself)\b/;
+  var DATE_RE = /^((jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.? \d{4}|\d{1,2}\/\d{4}|\d{4}|present|current)$/i;
+
+  function bulletFeedback(text) {
+    var ls = lines(text);
+    if (!ls.length) return '<div class="fb warn"><span>Add 3 to 6 achievement lines.</span></div>';
+    var weak = ls.filter(function (l) { return WEAK.test(l); }).length;
+    var nums = ls.filter(function (l) { return /\d/.test(l); }).length;
+    var longs = ls.filter(function (l) { return words(l) > 38; }).length;
+    var out = [];
+    out.push('<div class="fb ' + (nums >= Math.ceil(ls.length / 2) ? "" : "warn") + '"><span>' + nums + " of " + ls.length + " lines have a number (%, $, count, time).</span></div>");
+    if (weak) out.push('<div class="fb bad"><span>' + weak + ' line' + (weak > 1 ? "s start" : " starts") + ' with a weak opener like "Responsible for" or "Helped". Lead with what you achieved.</span></div>');
+    if (longs) out.push('<div class="fb warn"><span>' + longs + " line" + (longs > 1 ? "s are" : " is") + " over 38 words. Split or trim.</span></div>");
+    if (ls.length > 7) out.push('<div class="fb warn"><span>' + ls.length + " lines. Keep the strongest 6 for a single role.</span></div>");
+    if (!weak && !longs && nums >= Math.ceil(ls.length / 2) && ls.length <= 7) out.push('<div class="fb"><span>These lines read well to both an ATS and a recruiter.</span></div>');
+    return out.join("");
+  }
+
+  var STOP = ("a about above across after again against all also am an and any are as at be because been before being below between both but by can " +
+    "could did do does doing down during each either etc few for from further had has have having he her here hers him his how i if in into is it its " +
+    "itself just me more most my no nor not now of off on once only or other our ours out over own per plus same she should so some such than that the " +
+    "their them then there these they this those through to too under until up us very via was we were what when where which while who whom why will " +
+    "with within would you your yours " +
+    "ability able account accountable applicant applicants apply benefits best candidate candidates company culture day days demonstrated desired " +
+    "including environment equal etc excellent experience experienced expert familiarity fast-paced good great help highly hiring ideal include " +
+    "including job join just key knowledge level looking make manage minimum must new opportunity opportunities paced part position preferred proven " +
+    "related required requirement requirements responsibilities responsible role salary seeking skill skills strong success successful support team " +
+    "teams track record understanding using various want well work working year years across like across ensure own owner drive driving deep advanced " +
+    "similar improve plus bonus etc multi-million million dollar our-").split(/\s+/);
+  var STOPSET = {}; STOP.forEach(function (w) { STOPSET[w] = 1; });
+
+  function keywords() {
+    var jd = state.target.jd || "";
+    if (!jd.trim()) return [];
+    var orig = {}, uni = {}, bi = {}, acr = {};
+    var okTok = function (t) { return t && !STOPSET[t] && !/^\d+\+?$/.test(t) && t.length > 1; };
+    // bigrams never cross list commas, line breaks or sentence ends
+    jd.split(/[,;:()\n\u2022]+|\.\s+|\s[-\u2013\u2014]\s/).forEach(function (seg) {
+      var raw = seg.replace(/[^A-Za-z0-9+#&.\/\- ]+/g, " ").split(/\s+/).map(function (w) { return w.replace(/^[.\-\/&]+|[.\-\/&]+$/g, ""); }).filter(Boolean);
+      var toks = raw.map(function (w) { var l = w.toLowerCase(); if (!orig[l]) orig[l] = w; return l; });
+      toks.forEach(function (t, i) {
+        if (/[A-Z].*[A-Z]/.test(raw[i]) && raw[i].length <= 8) acr[t] = 1;
+        if (okTok(t)) uni[t] = (uni[t] || 0) + 1;
+        var n = toks[i + 1];
+        if (okTok(t) && okTok(n)) { var b = t + " " + n; bi[b] = (bi[b] || 0) + 1; if (!orig[b]) orig[b] = raw[i] + " " + raw[i + 1]; }
+      });
+    });
+    var picked = [], covered = {};
+    Object.keys(bi).filter(function (b) { return bi[b] >= 2 || /^[A-Z]/.test(orig[b].split(" ")[0]) && /^[A-Z]/.test(orig[b].split(" ")[1]); })
+      .sort(function (x, y) { return bi[y] - bi[x]; }).slice(0, 18).forEach(function (b) {
+        picked.push(orig[b]); b.split(" ").forEach(function (w) { covered[w] = 1; });
+      });
+    Object.keys(uni).filter(function (u) { return !covered[u] && (uni[u] >= 2 || acr[u] || /^[A-Z]/.test(orig[u]) && u.length > 2); })
+      .sort(function (x, y) { return uni[y] - uni[x]; }).forEach(function (u) { picked.push(orig[u]); });
+    var seen = {};
+    return picked.filter(function (k) { var l = k.toLowerCase(); if (seen[l]) return false; seen[l] = 1; return true; }).slice(0, 30);
+  }
+  function hasTerm(text, term) {
+    var t = term.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    var stem = t.replace(/s$/, "");
+    return new RegExp("(^|[^a-z0-9])" + stem + "(s|es)?($|[^a-z0-9])", "i").test(text);
+  }
+  function resumeText() {
+    var s = state, parts = [s.contact.headline, s.summary, s.skills, s.certs, s.languages, s.awards];
+    s.experience.forEach(function (j) { parts.push(j.title, j.company, j.bullets); });
+    s.education.forEach(function (e) { parts.push(e.degree, e.school, e.details); });
+    return parts.join("\n").toLowerCase();
+  }
+  function kwStatus() {
+    var all = keywords(), txt = resumeText();
+    var hit = all.filter(function (k) { return hasTerm(txt, k); });
+    return { all: all, hit: hit, miss: all.filter(function (k) { return hit.indexOf(k) < 0; }) };
+  }
+  function kwSuggest() {
+    var k = kwStatus();
+    if (!k.all.length) return '<div class="tip">Paste a job description in step 1 and you will see the keywords it asks for here.</div>';
+    if (!k.miss.length) return '<div class="tip"><b>Nice.</b> Every keyword we pulled from the job post appears on your resume.</div>';
+    return '<div class="tip"><b>From the job post, not on your resume yet.</b> Tap one to add it to your skills if you have it.<div class="chips" style="margin-top:8px">' +
+      k.miss.map(function (w) { return '<button type="button" class="chip miss" data-act="add-kw" data-arg="' + esc(w) + '">+ ' + esc(w) + "</button>"; }).join("") + "</div></div>";
+  }
+
+  function analyze() {
+    var s = state, c = s.contact, checks = [], score = 0, total = 0;
+    function add(weight, frac, title, detail, step) {
+      var level = frac >= 0.999 ? "ok" : frac >= 0.5 ? "warn" : "bad";
+      if (weight === 0) level = "info";
+      total += weight; score += weight * Math.max(0, Math.min(1, frac));
+      checks.push({ level: level, title: title, detail: detail, step: step });
+    }
+    var contactMissing = [["name", c.name], ["email", c.email], ["phone", c.phone], ["city", c.location]].filter(function (x) { return !String(x[1] || "").trim(); }).map(function (x) { return x[0]; });
+    add(12, 1 - contactMissing.length / 4, contactMissing.length ? "Contact details incomplete" : "Contact details complete",
+      contactMissing.length ? "Missing: " + contactMissing.join(", ") + "." : "Name, email, phone and city are all present as plain text.", 1);
+    if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) add(4, 0, "Email looks invalid", "Check the address for typos.", 1);
+
+    var jobs = s.experience.filter(function (j) { return j.title || j.company || j.bullets; });
+    var jobsOk = jobs.filter(function (j) { return j.title && j.company && j.start && (j.end || j.current); });
+    add(14, jobs.length ? jobsOk.length / jobs.length : 0, jobs.length ? jobsOk.length + " of " + jobs.length + " jobs have title, company and dates" : "No work experience yet",
+      jobs.length ? (jobsOk.length === jobs.length ? "Every role is fully labelled." : "An ATS needs title, company, start and end date to compute your experience.") : "Add at least one role.", 2);
+
+    var all = [];
+    jobs.forEach(function (j) { all = all.concat(lines(j.bullets)); });
+    var withNum = all.filter(function (l) { return /\d/.test(l); }).length;
+    var weak = all.filter(function (l) { return WEAK.test(l); });
+    add(14, all.length ? Math.min(1, (withNum / all.length) / 0.6) : 0, all.length ? withNum + " of " + all.length + " achievement lines are quantified" : "No achievement lines yet",
+      "Aim for numbers in at least 60% of lines: revenue, %, budget, ACoS, time saved, team size.", 2);
+    add(10, all.length ? 1 - weak.length / all.length : 0, weak.length ? weak.length + " line" + (weak.length > 1 ? "s start" : " starts") + " with a weak opener" : "Lines open with action verbs",
+      weak.length ? "Rewrite: “" + esc(weak[0].slice(0, 70)) + (weak[0].length > 70 ? "…" : "") + "”" : "Good. Recruiters skim the first two words of each line.", 2);
+
+    var dates = [];
+    jobs.forEach(function (j) { dates.push(j.start); if (!j.current) dates.push(j.end); });
+    dates = dates.filter(Boolean);
+    var badDates = dates.filter(function (d) { return !DATE_RE.test(d.trim()); });
+    add(5, dates.length ? 1 - badDates.length / dates.length : 0, badDates.length ? "Some dates are hard to parse" : "Dates use a parseable format",
+      badDates.length ? "Use “Mar 2022” or “03/2022”. Unclear: " + badDates.map(esc).join(", ") : "Month and year, written the same way everywhere.", 2);
+
+    var skillCount = lines(s.skills).reduce(function (n, l) { return n + l.replace(/^[^:]*:/, "").split(/[,;|]/).filter(function (x) { return x.trim(); }).length; }, 0);
+    add(10, Math.min(1, skillCount / 10), skillCount + " skills listed", skillCount >= 10 ? "A solid Skills section for keyword matching." : "List at least 10 specific skills and tools.", 3);
+
+    var eduOk = s.education.some(function (e) { return e.degree && e.school; });
+    add(5, eduOk ? 1 : 0, eduOk ? "Education included" : "Education missing", eduOk ? "" : "Add your highest degree or relevant training.", 4);
+
+    var sw = words(s.summary);
+    add(8, sw >= 30 && sw <= 100 ? 1 : sw ? 0.5 : 0, sw ? "Summary is " + sw + " words" : "No summary yet", sw >= 30 && sw <= 100 ? "Good length." : "Keep it between 40 and 90 words.", 6);
+
+    var pron = [s.summary].concat(all).filter(function (t) { return PRONOUN.test(t || ""); }).length;
+    add(4, pron ? 0 : 1, pron ? "First-person words found" : "No first-person words", pron ? "Drop “I”, “my” and “me”. Resumes are written in implied first person." : "", 6);
+
+    var kw = kwStatus();
+    if (kw.all.length) {
+      var r = kw.hit.length / kw.all.length;
+      add(18, Math.min(1, r / 0.75), "Keyword match " + Math.round(r * 100) + "%", r >= 0.75 ? "Strong match with the job post." : "Aim for 75%+. Missing terms are listed below.", 3);
+    } else {
+      add(0, 0, "No job description to compare against", "Paste one in step 1 to get a keyword match score.", 0);
+    }
+
+    var tw = words(resumeText());
+    add(0, 0, "About " + tw + " words in total", tw > 900 ? "Long for most roles. Two pages is the limit even for senior roles." : "Most strong resumes land between 400 and 800 words.", null);
+
+    add(0, 0, "Formatting is ATS-safe", "Single column, standard headings, no tables, icons, images or text boxes.", null);
+    return { score: total ? Math.round((score / total) * 100) : 0, checks: checks, kw: kw };
+  }
+
+  /* ---------- resume rendering ---------- */
+  function dateRange(j) {
+    var end = j.current ? "Present" : j.end;
+    return [j.start, end].filter(Boolean).join(" – ");
+  }
+  function contactBits() {
+    var c = state.contact;
+    return [c.location, c.phone, c.email, c.linkedin, c.website].map(function (x) { return (x || "").trim(); }).filter(Boolean);
+  }
+  function renderResume(forDoc) {
+    var s = state, c = s.contact, h = "";
+    h += "<h1>" + (c.name ? esc(c.name) : '<span class="r-empty">Your Name</span>') + "</h1>";
+    var hl = c.headline || s.target.role;
+    if (hl) h += '<p class="r-head">' + esc(hl) + "</p>";
+    var cb = contactBits();
+    h += '<p class="r-contact">' + (cb.length ? cb.map(esc).join(" | ") : '<span class="r-empty">City | phone | email | LinkedIn</span>') + "</p>";
+    if (s.summary.trim()) h += "<h2>Summary</h2><p>" + esc(s.summary.trim()) + "</p>";
+
+    var jobs = s.experience.filter(function (j) { return j.title || j.company || j.bullets; });
+    if (jobs.length) {
+      h += "<h2>Experience</h2>";
+      jobs.forEach(function (j) {
+        var left = "<strong>" + esc(j.title || "Job title") + "</strong>" + (j.company ? ", " + esc(j.company) : "") + (j.location ? " — " + esc(j.location) : "");
+        var dr = esc(dateRange(j));
+        h += '<div class="r-job">' + (forDoc ? "<p>" + left + (dr ? " | " + dr : "") + "</p>" : '<div class="r-row"><span>' + left + "</span><span>" + dr + "</span></div>");
+        var bl = lines(j.bullets);
+        if (bl.length) h += "<ul>" + bl.map(function (b) { return "<li>" + esc(b) + "</li>"; }).join("") + "</ul>";
+        h += "</div>";
+      });
+    }
+    var sk = lines(s.skills);
+    if (sk.length) h += "<h2>Skills</h2>" + sk.map(function (l) {
+      var m = l.match(/^([^:]{1,40}):\s*(.+)$/);
+      return "<p>" + (m ? "<strong>" + esc(m[1]) + ":</strong> " + esc(m[2]) : esc(l)) + "</p>";
+    }).join("");
+    var edu = s.education.filter(function (e) { return e.degree || e.school; });
+    if (edu.length) {
+      h += "<h2>Education</h2>";
+      edu.forEach(function (e) {
+        var left = "<strong>" + esc(e.degree) + "</strong>" + (e.school ? (e.degree ? ", " : "") + esc(e.school) : "") + (e.location ? " — " + esc(e.location) : "");
+        h += '<div class="r-job">' + (forDoc ? "<p>" + left + (e.year ? " | " + esc(e.year) : "") + "</p>" : '<div class="r-row"><span>' + left + "</span><span>" + esc(e.year) + "</span></div>") +
+          (e.details ? "<p>" + esc(e.details) + "</p>" : "") + "</div>";
+      });
+    }
+    var ce = lines(s.certs);
+    if (ce.length) h += "<h2>Certifications</h2><ul>" + ce.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
+    var aw = lines(s.awards);
+    if (aw.length) h += "<h2>Awards</h2><ul>" + aw.map(function (x) { return "<li>" + esc(x) + "</li>"; }).join("") + "</ul>";
+    if (s.languages.trim()) h += "<h2>Languages</h2><p>" + esc(s.languages.trim()) + "</p>";
+    return '<div class="resume" data-font="' + esc(s.style.font) + '">' + h + "</div>";
+  }
+
+  function plainText() {
+    var s = state, c = s.contact, out = [];
+    var rule = function (t) { out.push("", t.toUpperCase()); };
+    out.push(c.name || "Your Name");
+    if (c.headline || s.target.role) out.push(c.headline || s.target.role);
+    out.push(contactBits().join(" | "));
+    if (s.summary.trim()) { rule("Summary"); out.push(s.summary.trim()); }
+    var jobs = s.experience.filter(function (j) { return j.title || j.company || j.bullets; });
+    if (jobs.length) {
+      rule("Experience");
+      jobs.forEach(function (j, i) {
+        if (i) out.push("");
+        out.push([j.title, j.company].filter(Boolean).join(", ") + (j.location ? " - " + j.location : ""));
+        if (dateRange(j)) out.push(dateRange(j).replace("–", "-"));
+        lines(j.bullets).forEach(function (b) { out.push("- " + b); });
+      });
+    }
+    if (lines(s.skills).length) { rule("Skills"); lines(s.skills).forEach(function (l) { out.push(l); }); }
+    var edu = s.education.filter(function (e) { return e.degree || e.school; });
+    if (edu.length) { rule("Education"); edu.forEach(function (e) { out.push([e.degree, e.school].filter(Boolean).join(", ") + (e.location ? " - " + e.location : "") + (e.year ? " | " + e.year : "")); if (e.details) out.push(e.details); }); }
+    if (lines(s.certs).length) { rule("Certifications"); lines(s.certs).forEach(function (l) { out.push("- " + l); }); }
+    if (lines(s.awards).length) { rule("Awards"); lines(s.awards).forEach(function (l) { out.push("- " + l); }); }
+    if (s.languages.trim()) { rule("Languages"); out.push(s.languages.trim()); }
+    return out.join("\n");
+  }
+
+  function draftSummary() {
+    var s = state, role = s.target.role || s.contact.headline || "Professional";
+    var yrs = parseInt(s.target.years, 10);
+    var skills = [];
+    lines(s.skills).forEach(function (l) { l.replace(/^[^:]*:/, "").split(/[,;|]/).forEach(function (x) { x = x.trim(); if (x) skills.push(x); }); });
+    var list = function (a) { return a.length < 2 ? a.join("") : a.slice(0, -1).join(", ") + " and " + a[a.length - 1]; };
+    var first = s.experience.find(function (j) { return j.company || j.bullets; }) || {};
+    var ach = lines(first.bullets).find(function (l) { return /\d/.test(l) && !WEAK.test(l); });
+    var sent = [];
+    var r = role.charAt(0).toUpperCase() + role.slice(1);
+    sent.push(r + " with " + (yrs ? yrs + "+ years of experience" : "hands-on experience") + (skills.length ? " in " + list(skills.slice(0, 3)) : "") + ".");
+    if (ach) sent.push((first.company ? "At " + first.company + ", " : "Recently ") + ach.charAt(0).toLowerCase() + ach.slice(1).replace(/\.$/, "") + ".");
+    if (skills.length > 3) sent.push("Skilled in " + list(skills.slice(3, 6)) + ".");
+    return sent.join(" ");
+  }
+
+  /* ---------- rendering the app ---------- */
+  function renderSteps() {
+    $("steps").innerHTML = STEPS.map(function (st, i) {
+      return '<li><button type="button" data-act="goto" data-arg="' + i + '" class="' + (stepDone(i) ? "done" : "") + '"' + (i === state.step ? ' aria-current="step"' : "") +
+        '><span class="n">' + (i + 1) + "</span>" + st.label + "</button></li>";
+    }).join("");
+  }
+  function stepDone(i) {
+    var s = state;
+    switch (STEPS[i].id) {
+      case "target": return !!s.target.role;
+      case "contact": return !!(s.contact.name && s.contact.email);
+      case "experience": return s.experience.some(function (j) { return j.title && lines(j.bullets).length; });
+      case "skills": return lines(s.skills).length > 0;
+      case "education": return s.education.some(function (e) { return e.degree || e.school; });
+      case "extras": return !!(s.certs || s.languages || s.awards);
+      case "summary": return words(s.summary) >= 20;
+      default: return false;
+    }
+  }
+  function renderBanner() {
+    $("banner").innerHTML = state.isExample
+      ? '<div class="banner"><p><b>This is an example resume</b> for a fictional candidate so you can see how it works. Clear it to start answering with your own details.</p>' +
+        '<button type="button" class="btn primary small" data-act="blank">Start my resume</button></div>'
+      : "";
+  }
+  function renderCard() {
+    var i = state.step, id = STEPS[i].id;
+    $("card").innerHTML = VIEWS[id]() + '<div class="navrow">' +
+      (i > 0 ? '<button type="button" class="btn" data-act="prev">Back</button>' : "<span></span>") +
+      (i < STEPS.length - 1 ? '<button type="button" class="btn primary" data-act="next">Next: ' + STEPS[i + 1].label + "</button>" : '<button type="button" class="btn danger" data-act="blank">Start over</button>') +
+      "</div>";
+  }
+  function renderPreview() {
+    $("paper").innerHTML = renderResume(false);
+    $("f-style-font").value = state.style.font;
+    var a = analyze();
+    $("score-num").textContent = a.score;
+    $("score").setAttribute("data-level", a.score >= 80 ? "ok" : a.score >= 60 ? "warn" : "bad");
+    requestAnimationFrame(function () {
+      var p = $("paper"); if (!p.offsetWidth) return;
+      var pages = (p.scrollHeight / p.offsetWidth) * (8.5 / 11);
+      $("pages").textContent = "Live preview · about " + (Math.round(pages * 10) / 10) + " page" + (pages > 1.05 ? "s" : "");
+    });
+  }
+  function renderAll() { renderBanner(); renderSteps(); renderCard(); renderPreview(); }
+
+  function live() {
+    var id = STEPS[state.step].id;
+    if (id === "experience") state.experience.forEach(function (j, i) { var el = $("fb-" + i); if (el) el.innerHTML = bulletFeedback(j.bullets); });
+    if (id === "skills") $("kw-skills").innerHTML = kwSuggest();
+    if (id === "summary") $("sum-count").textContent = words(state.summary) + " words · aim for 40 to 90";
+    renderSteps();
+    renderPreview();
+  }
+
+  function toast(msg) {
+    var t = $("toast"); t.textContent = msg; t.hidden = false;
+    clearTimeout(toast.t); toast.t = setTimeout(function () { t.hidden = true; }, 2600);
+  }
+  function fileName(ext) { return ((state.contact.name || "Resume").trim().replace(/[^A-Za-z0-9]+/g, "_") + "_Resume." + ext); }
+  function download(content, type, name) {
+    try {
+      var url = URL.createObjectURL(new Blob([content], { type: type }));
+      var a = document.createElement("a"); a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      toast("Downloaded " + name);
+    } catch (e) { toast("Download is blocked here. Use Copy text instead."); }
+  }
+  var DOC_CSS = "body{font-family:" + "Arial,Helvetica,sans-serif;font-size:10.5pt;line-height:1.35;color:#000}h1{font-size:20pt;margin:0}h2{font-size:11pt;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #999;margin:14pt 0 4pt}p{margin:0 0 3pt}ul{margin:2pt 0 6pt}li{margin:0 0 2pt}.r-contact{color:#333}";
+
+  /* ---------- events ---------- */
+  document.addEventListener("input", function (e) {
+    var p = e.target.getAttribute && e.target.getAttribute("data-bind");
+    if (!p) return;
+    var v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
+    setPath(state, p, v);
+    if (p === "style.font") { save(); renderPreview(); return; }
+    if (/\.current$/.test(p)) { save(); renderCard(); renderPreview(); return; }
+    save(); live();
+  });
+  var blankArm = 0;
+  document.addEventListener("click", function (e) {
+    var b = e.target.closest("[data-act]");
+    if (!b) return;
+    var act = b.getAttribute("data-act"), arg = b.getAttribute("data-arg");
+    switch (act) {
+      case "view":
+        document.body.setAttribute("data-view", arg);
+        document.querySelectorAll(".tabs button").forEach(function (x) { x.setAttribute("aria-pressed", String(x.getAttribute("data-arg") === arg)); });
+        if (arg === "preview") renderPreview();
+        return;
+      case "goto": state.step = +arg; break;
+      case "next": state.step = Math.min(STEPS.length - 1, state.step + 1); break;
+      case "prev": state.step = Math.max(0, state.step - 1); break;
+      case "add-job": state.experience.push(newJob()); break;
+      case "del-job": state.experience.splice(+arg, 1); break;
+      case "up-job": var j = state.experience.splice(+arg, 1)[0]; state.experience.splice(+arg - 1, 0, j); break;
+      case "add-edu": state.education.push(newEdu()); break;
+      case "del-edu": state.education.splice(+arg, 1); break;
+      case "add-kw":
+        var ls = String(state.skills || "").replace(/\s+$/, "").split("\n");
+        var idx = ls.findIndex(function (l) { return /^additional:/i.test(l.trim()); });
+        if (idx >= 0) ls[idx] = ls[idx].replace(/\s*$/, "") + ", " + arg;
+        else ls.push("Additional: " + arg);
+        state.skills = ls.filter(function (l, i) { return l.trim() || i > 0; }).join("\n").replace(/^\n+/, "");
+        save(); renderCard(); renderSteps(); renderPreview(); toast("Added “" + arg + "” to Skills");
+        return;
+      case "draft": state.summary = draftSummary(); toast("Draft added. Edit it so it sounds like you."); break;
+      case "blank":
+        if (state.isExample) { var keepFont = state.style.font; state = blank(); state.style.font = keepFont; save(); renderAll(); toast("Cleared. Start with your target job."); return; }
+        if (Date.now() - blankArm > 4000) { blankArm = Date.now(); b.textContent = "Click again to erase everything"; return; }
+        state = blank(); break;
+      case "example": state = example(); break;
+      case "print":
+        $("print-root").innerHTML = renderResume(false);
+        try { window.print(); } catch (err) {}
+        if (inFrame()) toast("Printing is blocked in this preview. Open resume-builder/index.html directly.");
+        return;
+      case "doc":
+        download("<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word'><head><meta charset='utf-8'><title>" +
+          esc(state.contact.name || "Resume") + "</title><style>" + DOC_CSS + "</style></head><body>" + renderResume(true) + "</body></html>", "application/msword", fileName("doc"));
+        return;
+      case "txt": download(plainText(), "text/plain;charset=utf-8", fileName("txt")); return;
+      case "copy":
+        var txt = plainText();
+        var fallback = function () { var ta = $("plain"); if (ta) { ta.focus(); ta.select(); } toast("Text selected below. Press Ctrl+C or Cmd+C to copy."); };
+        try { navigator.clipboard.writeText(txt).then(function () { toast("Resume text copied"); }, fallback); } catch (err) { fallback(); }
+        return;
+      default: return;
+    }
+    save(); renderAll();
+    if (["goto", "next", "prev"].indexOf(act) >= 0) {
+      var top = $("steps").getBoundingClientRect().top + window.scrollY - 80;
+      if (window.scrollY > top) window.scrollTo(0, top);
+      if (act === "goto" && document.body.getAttribute("data-view") === "preview") document.querySelector('.tabs [data-arg="edit"]').click();
+    }
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
