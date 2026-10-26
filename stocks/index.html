@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PSX Price Predictor</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #16191d; --muted: #646b75; --line: #e3e6ea;
+  --accent: #2f6fde; --pred: #e0802a; --up: #1a8f4c; --down: #cc3b3b; --band: rgba(224,128,42,.14);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1216; --card: #171b21; --text: #e8ebef; --muted: #9aa2ad; --line: #2a3038;
+    --accent: #6d9cf0; --pred: #f0a24f; --up: #3cc47a; --down: #f06a6a; --band: rgba(240,162,79,.16);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+h1 { font-size: 22px; margin: 0; }
+h2 { font-size: 15px; margin: 0 0 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+select { font: inherit; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
+.sub { color: var(--muted); font-size: 13px; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: 1.4fr 1fr; }
+.g4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 800px) { .g2, .g4 { grid-template-columns: 1fr 1fr; } .g2 { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .g4 { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.big { font-size: 40px; font-weight: 700; letter-spacing: -.02em; }
+.chg { font-size: 18px; font-weight: 600; }
+.up { color: var(--up); } .down { color: var(--down); }
+.tile .v { font-size: 26px; font-weight: 700; }
+.tile .l { color: var(--muted); font-size: 13px; }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.bar { height: 8px; border-radius: 4px; background: var(--accent); }
+.bar.neg { background: var(--down); }
+.barrow { display: grid; grid-template-columns: 1fr 120px 60px; gap: 10px; align-items: center; font-size: 13px; padding: 4px 0; }
+.barrow .track { background: var(--line); border-radius: 4px; height: 8px; overflow: hidden; }
+.ranges button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--text); cursor: pointer; }
+.ranges button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chartbox { position: relative; height: 340px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: right; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--muted); font-weight: 600; }
+.tablewrap { overflow-x: auto; }
+.section { margin-top: 16px; }
+.note { color: var(--muted); font-size: 12px; margin-top: 24px; }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1 id="title">PSX Price Predictor</h1>
+      <div class="sub" id="meta">Loading…</div>
+    </div>
+    <select id="ticker" aria-label="Stock"></select>
+  </header>
+  <div id="app"></div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const fmt = (v, d = 2) => v == null ? "–" : Number(v).toLocaleString("en-PK", { minimumFractionDigits: d, maximumFractionDigits: d });
+const pct = (v, d = 2) => v == null ? "–" : (v > 0 ? "+" : "") + fmt(v, d) + "%";
+const cls = (v) => v > 0 ? "up" : v < 0 ? "down" : "";
+let chart, data, range = 63;
+
+async function init() {
+  let tickers;
+  try {
+    tickers = await (await fetch("data/tickers.json", { cache: "no-store" })).json();
+  } catch {
+    $("#meta").textContent = "";
+    $("#app").innerHTML = '<div class="card empty">No data yet. Run the “Daily stock prediction” GitHub Action once to fetch prices and make the first forecast.</div>';
+    return;
+  }
+  const sel = $("#ticker");
+  sel.innerHTML = tickers.map(t => `<option value="${t.symbol}">${t.symbol} · ${t.name}</option>`).join("");
+  const saved = (() => { try { return localStorage.getItem("ticker"); } catch { return null; } })();
+  if (saved && tickers.some(t => t.symbol === saved)) sel.value = saved;
+  sel.onchange = () => { try { localStorage.setItem("ticker", sel.value); } catch {} load(sel.value); };
+  load(sel.value);
+}
+
+async function load(symbol) {
+  data = await (await fetch(`data/${symbol}.json`, { cache: "no-store" })).json();
+  render();
+}
+
+function tile(label, value, sub, c = "") {
+  return `<div class="card tile"><div class="l">${label}</div><div class="v ${c}">${value}</div><div class="sub">${sub}</div></div>`;
+}
+
+function render() {
+  const d = data, f = d.forecast, m = d.metrics;
+  $("#title").textContent = `${d.symbol} — ${d.name}`;
+  $("#meta").textContent = `Last close ${d.last_date} · updated ${new Date(d.updated_at).toLocaleString()} · source: ${d.source}`;
+
+  const resolved = d.live.filter(p => p.actual != null);
+  const lastLive = resolved[resolved.length - 1];
+  const live = m.live, bt = m.backtest, bt30 = m.backtest_last30;
+  const chg = f ? (f.pred / f.last_close - 1) * 100 : null;
+
+  $("#app").innerHTML = `
+  <div class="grid g2">
+    <div class="card">
+      <h2>Next session forecast</h2>
+      ${f ? `
+      <div class="big">Rs ${fmt(f.pred)}</div>
+      <div class="chg ${cls(chg)}">${chg > 0 ? "▲" : chg < 0 ? "▼" : "■"} ${pct(chg)} vs Rs ${fmt(f.last_close)} close on ${f.based_on}</div>
+      <div class="sub" style="margin-top:8px">80% likely range: Rs ${fmt(f.low)} – Rs ${fmt(f.high)}</div>
+      <div style="margin-top:14px">${f.components.map(c => `<div class="row"><span class="sub">${c.model}</span><span class="${cls(c.pred_return_pct)}">${pct(c.pred_return_pct, 3)}</span></div>`).join("")}</div>
+      ` : '<div class="empty">Not enough history yet.</div>'}
+    </div>
+    <div class="card">
+      <h2>Last prediction vs actual</h2>
+      ${lastLive ? `
+        <div class="row"><span>Session</span><b>${lastLive.date}</b></div>
+        <div class="row"><span>Predicted</span><b>Rs ${fmt(lastLive.pred)}</b></div>
+        <div class="row"><span>Actual</span><b>Rs ${fmt(lastLive.actual)}</b></div>
+        <div class="row"><span>Error</span><b class="${cls(-Math.abs(lastLive.error_pct))}">${pct(lastLive.error_pct)} (Rs ${fmt(lastLive.error)})</b></div>
+        <div class="row"><span>Direction</span><b>${lastLive.direction_hit == null ? "No change" : lastLive.direction_hit ? '<span class="up">✓ Correct</span>' : '<span class="down">✗ Wrong</span>'}</b></div>
+        <div class="row"><span>Within range</span><b>${lastLive.in_band ? "Yes" : "No"}</b></div>
+      ` : '<div class="sub">The first live prediction will be scored after the next trading session closes. Until then, see the backtest below.</div>'}
+    </div>
+  </div>
+
+  <div class="grid g4 section">
+    ${tile("Live predictions scored", live ? live.n : 0, live ? `avg error ${fmt(live.mape_pct)}% · direction ${live.direction_acc_pct ?? "–"}%` : "waiting for first result")}
+    ${tile("Avg error (backtest)", bt ? fmt(bt.mape_pct) + "%" : "–", bt ? `Rs ${fmt(bt.mae)} per day over ${bt.n} days` : "")}
+    ${tile("Direction accuracy", bt ? (bt.direction_acc_pct ?? "–") + "%" : "–", bt30 ? `last 30 days: ${bt30.direction_acc_pct ?? "–"}%` : "")}
+    ${tile("Beats “no change” by", bt ? pct(bt.skill_vs_naive_pct, 1) : "–", bt ? `naive error Rs ${fmt(bt.naive_mae)} · range hit ${bt.band_coverage_pct}%` : "", bt ? cls(bt.skill_vs_naive_pct) : "")}
+  </div>
+
+  <div class="card section">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <h2 style="margin:0">Predicted vs actual close</h2>
+      <div class="ranges">${[[21,"1M"],[63,"3M"],[126,"6M"],[0,"All"]].map(([v,l]) => `<button data-r="${v}" class="${v===range?"on":""}">${l}</button>`).join(" ")}</div>
+    </div>
+    <div class="chartbox"><canvas id="chart"></canvas></div>
+  </div>
+
+  <div class="grid g2 section">
+    <div class="card">
+      <h2>What's driving the forecast</h2>
+      <div class="sub" style="margin-bottom:10px">Current influence of each variable (positive = pushes tomorrow's price up when the variable is high)</div>
+      ${bars(d.state.feature_influence.map(x => [x.feature, x.coef]), true)}
+    </div>
+    <div class="card">
+      <h2>Model trust weights</h2>
+      <div class="sub" style="margin-bottom:10px">Shift every day toward whichever model has been most accurate recently</div>
+      ${bars(d.state.model_weights.map(x => [x.model, x.weight * 100]), false, "%")}
+    </div>
+  </div>
+
+  <div class="card section">
+    <h2>Live prediction log</h2>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Made after close of</th><th>Session</th><th>Prev close</th><th>Predicted</th><th>Range</th><th>Actual</th><th>Error</th><th>Direction</th></tr></thead>
+      <tbody>${d.live.slice().reverse().map(p => `<tr>
+        <td>${p.based_on}</td><td>${p.date || "pending"}</td><td>${fmt(p.last_close)}</td><td>${fmt(p.pred)}</td>
+        <td>${fmt(p.low)}–${fmt(p.high)}</td><td>${p.actual == null ? "–" : fmt(p.actual)}</td>
+        <td>${p.error_pct == null ? "–" : pct(p.error_pct)}</td>
+        <td>${p.actual == null ? "–" : p.direction_hit == null ? "flat" : p.direction_hit ? '<span class="up">✓</span>' : '<span class="down">✗</span>'}</td></tr>`).join("")}</tbody>
+    </table></div>
+  </div>
+
+  <p class="note">How it works: every trading day after PSX closes, the latest prices are downloaded, yesterday's forecast is scored against the actual close, every model is updated with its own error, and a new forecast is made. The backtest replays history the same way: each prediction only uses data available on that day. This is a statistical experiment, not investment advice.</p>`;
+
+  document.querySelectorAll(".ranges button").forEach(b => b.onclick = () => { range = +b.dataset.r; render(); });
+  drawChart();
+}
+
+function bars(items, signed, unit = "") {
+  const max = Math.max(...items.map(([, v]) => Math.abs(v)), 1e-9);
+  return items.map(([label, v]) => `<div class="barrow"><span>${label}</span>
+    <div class="track"><div class="bar ${signed && v < 0 ? "neg" : ""}" style="width:${(Math.abs(v) / max * 100).toFixed(1)}%"></div></div>
+    <span style="text-align:right">${signed ? (v > 0 ? "+" : "") + v.toFixed(2) : v.toFixed(1) + unit}</span></div>`).join("");
+}
+
+function drawChart() {
+  const d = data;
+  const preds = new Map();
+  d.backtest.forEach(p => preds.set(p.date, p));
+  d.live.forEach(p => p.date && preds.set(p.date, p));
+  let prices = d.prices;
+  if (range) prices = prices.slice(-range);
+  const labels = prices.map(p => p[0]);
+  const actual = prices.map(p => p[1]);
+  const pred = labels.map(l => preds.get(l)?.pred ?? null);
+  const low = labels.map(l => preds.get(l)?.low ?? null);
+  const high = labels.map(l => preds.get(l)?.high ?? null);
+  if (d.forecast) {
+    labels.push("Next"); actual.push(null);
+    pred.push(d.forecast.pred); low.push(d.forecast.low); high.push(d.forecast.high);
+  }
+  const css = getComputedStyle(document.documentElement);
+  const c = (n) => css.getPropertyValue(n).trim();
+  if (chart) chart.destroy();
+  chart = new Chart($("#chart"), {
+    type: "line",
+    data: { labels, datasets: [
+      { label: "80% range", data: high, borderWidth: 0, pointRadius: 0, fill: "+1", backgroundColor: c("--band") },
+      { label: "range-low", data: low, borderWidth: 0, pointRadius: 0, fill: false },
+      { label: "Actual", data: actual, borderColor: c("--accent"), borderWidth: 2, pointRadius: 0, tension: .1 },
+      { label: "Predicted", data: pred, borderColor: c("--pred"), borderWidth: 1.5, borderDash: [4, 3],
+        pointRadius: labels.map((l, i) => i === labels.length - 1 && d.forecast ? 5 : 0), pointBackgroundColor: c("--pred"), tension: .1 },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { labels: { color: c("--muted"), filter: (i) => i.text !== "range-low" } },
+        tooltip: { filter: (i) => i.dataset.label !== "range-low", callbacks: { label: (i) => `${i.dataset.label}: Rs ${fmt(i.raw)}` } },
+      },
+      scales: {
+        x: { ticks: { color: c("--muted"), maxTicksLimit: 8 }, grid: { color: c("--line") } },
+        y: { ticks: { color: c("--muted") }, grid: { color: c("--line") } },
+      },
+    },
+  });
+}
+
+init();
+</script>
+</body>
+</html>
