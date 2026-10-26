@@ -1,8 +1,8 @@
 """Download daily end-of-day prices.
 
-Primary source is the Pakistan Stock Exchange data portal (dps.psx.com.pk).
-Yahoo Finance (SYMBOL.KA) is used as a fallback if PSX is unreachable.
-Both return a list of {"date", "close", "volume"} sorted oldest first.
+Primary source is PSX's own historical price table (dps.psx.com.pk), read
+through the open-source `psxdata` library. The PSX timeseries endpoint and
+Yahoo Finance (SYMBOL.KA) are fallbacks. All return a list of {"date", "close", "volume"} sorted oldest first.
 """
 
 import json
@@ -39,6 +39,19 @@ def _dedupe(rows):
     return [by_date[d] for d in sorted(by_date)]
 
 
+def fetch_psxdata(symbol):
+    import psxdata
+
+    df = psxdata.stocks(symbol, cache=False)
+    if df is None or df.empty:
+        raise RuntimeError(f"psxdata returned no data for {symbol}")
+    volume = df["volume"].astype("float64").fillna(0.0)
+    rows = []
+    for d, c, v in zip(df["date"], df["close"], volume):
+        rows.append({"date": str(d)[:10], "close": float(c), "volume": float(v)})
+    return _dedupe(rows)
+
+
 def fetch_psx(symbol):
     # Response: {"status": 1, "data": [[unix_ts, close, volume, open], ...]} newest first.
     payload = _get_json(f"https://dps.psx.com.pk/timeseries/eod/{symbol}")
@@ -71,7 +84,7 @@ def fetch_yahoo(symbol):
 def fetch_history(symbol):
     """Return (rows, source_name). Raises if every source fails."""
     errors = []
-    for name, fn in (("PSX", fetch_psx), ("Yahoo Finance", fetch_yahoo)):
+    for name, fn in (("PSX", fetch_psxdata), ("PSX timeseries", fetch_psx), ("Yahoo Finance", fetch_yahoo)):
         try:
             rows = fn(symbol)
             if len(rows) >= 2:
