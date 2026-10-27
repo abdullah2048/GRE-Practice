@@ -4,8 +4,8 @@ on:
   schedule:
     # Mon-Fri after the PSX close (times in UTC; Pakistan = UTC+5).
     # GitHub often delays or drops scheduled runs, so there are backups;
-    # re-running on the same day changes nothing.
-    - cron: "17 11 * * 1-5"   # 4:17pm PKT
+    # a repeat run on the same day adds no new prediction.
+    - cron: "17 12 * * 1-5"   # 5:17pm PKT (Friday close is 4:30pm)
     - cron: "47 13 * * 1-5"   # 6:47pm PKT
     - cron: "23 16 * * 1-5"   # 9:23pm PKT
   workflow_dispatch:
