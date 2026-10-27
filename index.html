@@ -234,6 +234,17 @@ function storageWorks(){
 function storageWarningHTML(){
   return '<div class="warn" style="margin-bottom:22px"><b>Your progress and score history are not being saved in this browser.</b> This usually happens when this page is viewed inside an embedded preview (like a Claude artifact) with strict privacy settings, a private/incognito window, or "block third-party cookies/site data" turned on. Open this page\'s direct link in its own browser tab (not embedded), or use the GitHub Pages / downloaded copy of this app, to keep your resume saves and score history.</div>';
 }
+function diagnosticsHTML(){
+  var raw="(could not read)";
+  try{raw=localStorage.getItem("gre-hist")||"(empty)"}catch(e){raw="(threw: "+e.message+")"}
+  return '<details class="schema" style="margin-bottom:28px"><summary>Troubleshoot saved progress &amp; history</summary>'+
+  '<p class="upnote">If your score history or resume saves keep disappearing after you reload this page, use this to see exactly what this browser is storing.</p>'+
+  '<p style="font:13px var(--mono)">Quick storage test: <b id="diagResult">'+(storageWorks()?"passed":"FAILED")+'</b></p>'+
+  '<p style="font:13px var(--mono)">Current gre-hist value: <span id="diagRaw" style="word-break:break-all">'+esc(raw)+'</span></p>'+
+  '<div class="uprow"><button class="btn" id="diagWrite">Write a test entry now</button><button class="btn" id="diagReload">Reload the page</button></div>'+
+  '<p class="upnote" id="diagInstr">Click "Write a test entry now", then "Reload the page". If the value above goes back to empty after reloading, this browser is not persisting storage for this page &mdash; try the GitHub Pages link or your own downloaded copy instead.</p>'+
+  '</details>';
+}
 
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 var TABLE_TAGS="table|thead|tbody|tr|td|th|caption";
@@ -363,6 +374,7 @@ function home(){
   var h='<main class="home"><h1>My GRE Practice</h1><p class="lede">Your own private copy of the GRE Test Room. Take a full-length test, practice a single section, or upload more tests to build out your own question bank. This page and everything you upload live only in this browser &mdash; nobody else can open it.</p>';
   h+='<div class="rules"><span>Verbal &middot; timed, per section</span><span>Quant &middot; timed, per section</span><span>Writing task &middot; 30 min (where the test includes one)</span><span>Mark &amp; review before time runs out</span></div>';
   if(!storageWorks())h+=storageWarningHTML();
+  h+=diagnosticsHTML();
   h+=uploadSectionHTML();
   h+=buildHistoryDashboard(hist);
   h+='<div class="grid">';
@@ -419,6 +431,23 @@ function home(){
     else selectText();
     function selectText(){var pre=document.getElementById("schemaBox");var r=document.createRange();r.selectNodeContents(pre);var sel=window.getSelection();sel.removeAllRanges();sel.addRange(r)}
   };
+  var dw=document.getElementById("diagWrite"),dr=document.getElementById("diagReload");
+  if(dw)dw.onclick=function(){
+    var ok=storageWorks();
+    var raw="(could not read)";
+    if(ok){
+      try{
+        var h2=JSON.parse(localStorage.getItem("gre-hist")||"{}");
+        h2["__diag__"]=h2["__diag__"]||[];
+        h2["__diag__"].push({v:0,q:0,when:new Date().toLocaleString(),ts:Date.now(),correct:0,total:1,diag:true});
+        localStorage.setItem("gre-hist",JSON.stringify(h2));
+        raw=localStorage.getItem("gre-hist");
+      }catch(e){raw="(threw on write: "+e.message+")"}
+    }
+    document.getElementById("diagResult").textContent=ok?"passed":"FAILED";
+    document.getElementById("diagRaw").textContent=raw;
+  };
+  if(dr)dr.onclick=function(){location.reload()};
 }
 
 /* ---------- session ---------- */
