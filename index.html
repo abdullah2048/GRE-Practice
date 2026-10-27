@@ -226,8 +226,14 @@ var BUILTIN=[{n:1,id:"35",awa:true,ord:QV},{n:2,id:"2",awa:true,ord:QV},{n:3,id:
 window.GRE=window.GRE||{};
 var app=document.getElementById("app");
 var S=null, timer=null, calcOpen=false;
-var LS={get:function(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+var LS={get:function(k){try{return JSON.parse(localStorage.getItem(k))}catch(e){return null}},set:function(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}};
 var TESTS=[];
+function storageWorks(){
+  try{var k="__gre_storage_test__";localStorage.setItem(k,"1");var ok=localStorage.getItem(k)==="1";localStorage.removeItem(k);return ok}catch(e){return false}
+}
+function storageWarningHTML(){
+  return '<div class="warn" style="margin-bottom:22px"><b>Your progress and score history are not being saved in this browser.</b> This usually happens when this page is viewed inside an embedded preview (like a Claude artifact) with strict privacy settings, a private/incognito window, or "block third-party cookies/site data" turned on. Open this page\'s direct link in its own browser tab (not embedded), or use the GitHub Pages / downloaded copy of this app, to keep your resume saves and score history.</div>';
+}
 
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}
 var TABLE_TAGS="table|thead|tbody|tr|td|th|caption";
@@ -356,6 +362,7 @@ function home(){
   var hist=LS.get("gre-hist")||{};
   var h='<main class="home"><h1>My GRE Practice</h1><p class="lede">Your own private copy of the GRE Test Room. Take a full-length test, practice a single section, or upload more tests to build out your own question bank. This page and everything you upload live only in this browser &mdash; nobody else can open it.</p>';
   h+='<div class="rules"><span>Verbal &middot; timed, per section</span><span>Quant &middot; timed, per section</span><span>Writing task &middot; 30 min (where the test includes one)</span><span>Mark &amp; review before time runs out</span></div>';
+  if(!storageWorks())h+=storageWarningHTML();
   h+=uploadSectionHTML();
   h+=buildHistoryDashboard(hist);
   h+='<div class="grid">';
@@ -756,8 +763,9 @@ function results(){
   if(vt)sc+='<div><div class="big">'+est(vc,vt)+'</div><div class="cap">Verbal estimate</div></div>';
   if(qt)sc+='<div><div class="big">'+est(qc,qt)+'</div><div class="cap">Quant estimate</div></div>';
   if(S.plan.indexOf("awa")>=0)sc+='<div><div class="big">'+wordCount(S.awa)+'</div><div class="cap">Essay words</div></div>';
-  if(S.mode==="full"){var hist=LS.get("gre-hist")||{};hist[S.n]=histList(hist,S.n);hist[S.n].push({v:est(vc,vt),q:est(qc,qt),when:new Date().toLocaleDateString(),ts:Date.now(),correct:vc+qc,total:vt+qt});LS.set("gre-hist",hist)}
-  var h='<div class="win"><div class="topbar"><div class="ttl">Practice Test '+S.n+' &middot; Results</div><div class="tools"><button id="home">All tests</button></div></div><div class="center"><div class="card"><h2>Test complete</h2><div class="scoreline">'+sc+'</div><p style="font-size:13px;color:var(--ink2)">Score estimates use a simple linear scale from 130 to 170 based on your percent correct. The real GRE adapts the second section to your first, so treat these as a rough guide only.</p>'+
+  var histSaved=true;
+  if(S.mode==="full"){var hist=LS.get("gre-hist")||{};hist[S.n]=histList(hist,S.n);hist[S.n].push({v:est(vc,vt),q:est(qc,qt),when:new Date().toLocaleDateString(),ts:Date.now(),correct:vc+qc,total:vt+qt});histSaved=LS.set("gre-hist",hist)&&storageWorks()}
+  var h='<div class="win"><div class="topbar"><div class="ttl">Practice Test '+S.n+' &middot; Results</div><div class="tools"><button id="home">All tests</button></div></div><div class="center"><div class="card"><h2>Test complete</h2>'+(S.mode==="full"&&!histSaved?storageWarningHTML():'')+'<div class="scoreline">'+sc+'</div><p style="font-size:13px;color:var(--ink2)">Score estimates use a simple linear scale from 130 to 170 based on your percent correct. The real GRE adapts the second section to your first, so treat these as a rough guide only.</p>'+
   (rows?'<table class="res"><thead><tr><th>Section</th><th>Correct</th><th>Percent</th></tr></thead><tbody>'+rows+'</tbody></table>':'')+
   (S.plan.indexOf("awa")>=0?'<h3>Your essay</h3><div class="essay">'+esc(S.awa||"(No essay written)")+'</div><p style="font-size:13px;color:var(--ink2)">The writing task is not machine scored. Compare your essay with the issue prompt in the review.</p>':'')+
   '<p style="margin-top:22px;display:flex;gap:8px;flex-wrap:wrap">'+(tried.length?'<button class="btn primary" id="revans">Review questions and answers</button>':'')+'<button class="btn" id="home2">Back to all tests</button></p></div></div></div>';
