@@ -2,8 +2,10 @@ name: Daily stock prediction
 
 on:
   schedule:
-    # Mon-Fri 12:30 UTC = 5:30pm Pakistan time, after the PSX close
-    - cron: "30 12 * * 1-5"
+    # Mon-Fri (no Saturday/Sunday). Times are UTC; Pakistan = UTC+5.
+    - cron: "45 10 * * 1-5"   # 3:45pm PKT, main daily run
+    # Backup in case GitHub skips the 3:45pm run; adds nothing if it already ran.
+    - cron: "47 12 * * 1-5"   # 5:47pm PKT
   workflow_dispatch:
 
 permissions:
