@@ -15,17 +15,24 @@ learns from its own errors.
 4. Commits `stocks/data/*.json`; the static page `stocks/index.html` reads it.
 
 ## The model (`predictor/model.py`, numpy only)
-Input variables: today's / lagged returns, 5-day return, price vs 5- and 20-day
-averages, RSI(14), 10-day volatility, volume vs average, KSE-100 1- and 5-day return.
+Several candidate models run side by side every day (champion/challenger):
 
-Five sub-models are blended, re-weighted daily by recent accuracy:
-- Adaptive regression (fast and slow): recursive least squares, updated with every error
-- Pattern match: k-nearest past days, what happened next
-- Trend: 10-day exponentially weighted average return
-- No change: tomorrow = today (the baseline to beat)
+| Candidate | Inputs | Sub-models |
+|---|---|---|
+| Original ensemble | returns, moving-average gaps, RSI, volatility, volume, KSE-100 | adaptive regressions, k-NN pattern match, trend, no-change |
+| Shrunk regression + new variables | all of the above + 3-month return, 52-week range position, price-limit days, Monday flag | two ridge regressions, no-change |
+| Strongly shrunk regression | same | one ridge regression |
 
-Every backtest prediction uses only data available on that day, so the
-backtest is an honest out-of-sample record. Live predictions are append-only.
+The published forecast uses the champion. A challenger takes over only after
+its average error over the trailing ~250 trading days is at least 1% lower.
+Every candidate's live predictions are logged, so the leaderboard on the page
+shows both backtest and live accuracy.
+
+**To try an idea:** add an entry to `CANDIDATES`. It is scored on the same
+days as the others and only takes over if it actually wins.
+
+Every backtest prediction uses only data available on that day. Live
+predictions are append-only.
 
 ## Add another stock
 Add an entry to `predictor/config.py` (`TICKERS`). The dropdown picks it up.
