@@ -117,7 +117,7 @@ function render() {
       ${f ? `
       <div class="big">Rs ${fmt(f.pred)}</div>
       <div class="chg ${cls(chg)}">${chg > 0 ? "▲" : chg < 0 ? "▼" : "■"} ${pct(chg)} vs Rs ${fmt(f.last_close)} close on ${f.based_on}</div>
-      <div class="sub" style="margin-top:8px">80% likely range: Rs ${fmt(f.low)} – Rs ${fmt(f.high)}</div>
+      <div class="sub" style="margin-top:8px">80% likely range: Rs ${fmt(f.low)} – Rs ${fmt(f.high)}${d.state.champion_name ? ` · model: ${d.state.champion_name}` : ""}</div>
       <div style="margin-top:14px">${f.components.map(c => `<div class="row"><span class="sub">${c.model}</span><span class="${cls(c.pred_return_pct)}">${pct(c.pred_return_pct, 3)}</span></div>`).join("")}</div>
       ` : '<div class="empty">Not enough history yet.</div>'}
     </div>
@@ -161,6 +161,21 @@ function render() {
       ${bars(d.state.model_weights.map(x => [x.model, x.weight * 100]), false, "%")}
     </div>
   </div>
+
+  ${d.state.leaderboard ? `
+  <div class="card section">
+    <h2>Model leaderboard</h2>
+    <div class="sub" style="margin-bottom:10px">Candidate models compete on the same days. The forecast uses the champion; a challenger takes over only after beating it by 1%+ over the past year. "Beats no-change" above 0 means more accurate than assuming tomorrow = today.</div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Model</th><th>Beats no-change (10y)</th><th>Last 250 days</th><th>Direction (10y)</th><th>Live</th></tr></thead>
+      <tbody>${d.state.leaderboard.map(c => `<tr>
+        <td>${c.champion ? "★ " : ""}${c.name}</td>
+        <td class="${cls(c.backtest?.skill_vs_naive_pct)}">${pct(c.backtest?.skill_vs_naive_pct)}</td>
+        <td class="${cls(c.backtest_last250?.skill_vs_naive_pct)}">${pct(c.backtest_last250?.skill_vs_naive_pct)}</td>
+        <td>${c.backtest?.direction_acc_pct ?? "–"}%</td>
+        <td>${c.live ? `${pct(c.live.skill_vs_naive_pct)} (${c.live.n})` : "starting"}</td></tr>`).join("")}</tbody>
+    </table></div>
+  </div>` : ""}
 
   <div class="card section">
     <h2>Live prediction log</h2>

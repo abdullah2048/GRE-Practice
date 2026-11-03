@@ -89,8 +89,19 @@ def process(ticker, rows, index_rows, source):
             "pred": forecast["pred"],
             "low": forecast["low"],
             "high": forecast["high"],
+            "model": forecast["model"],
+            "candidates": forecast["candidates"],
             "actual": None,
         })
+
+    # Live score of every candidate, from predictions logged before the outcome.
+    for entry in state["leaderboard"]:
+        scored = [
+            {"pred": p["candidates"][entry["key"]], "actual": p["actual"], "last_close": p["last_close"]}
+            for p in live
+            if p.get("actual") is not None and entry["key"] in p.get("candidates", {})
+        ]
+        entry["live"] = model.score(scored)
 
     out = {
         "symbol": symbol,
