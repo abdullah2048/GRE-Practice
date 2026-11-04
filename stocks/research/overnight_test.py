@@ -96,7 +96,7 @@ def main():
     start = 300
     print(f"\nTest days: {len(idx) - start} (ENGROH {dates[idx[start]]} to {dates[-1]})\n")
     report("Current variables (3:45pm forecast)", walk_forward(base, y), y, start)
-    report("+ overnight US/oil/VIX (morning forecast)", walk_forward(np.c_[base, extra], y), y, start)
+    report("+ overnight US/oil/VIX (morning forecast)", walk_forward(np.c_[base, extra[idx]], y), y, start)
     report("Overnight variables only", walk_forward(extra[idx], y), y, start)
     for j, key in enumerate(ext):
         c = np.corrcoef(extra[idx, j], y)[0, 1]
