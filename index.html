@@ -59,6 +59,26 @@ h1,h2,h3{text-wrap:balance;margin:0}
 .del{position:absolute;bottom:16px;right:16px;font-size:12px;color:var(--bad);background:none;border:0;text-decoration:underline;padding:2px}
 .copybtn{font-size:12px;padding:4px 9px}
 
+/* ---------- attempt history ---------- */
+.hist{background:var(--paper);border:1px solid var(--line);border-radius:4px;padding:22px 24px;margin-bottom:28px;display:flex;flex-direction:column;gap:14px}
+.hist .hh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.hist h2{font:600 18px var(--sans)}
+.hstats{display:flex;flex-wrap:wrap;gap:10px}
+.hstats div{background:#f3f6f9;border:1px solid var(--line2);border-radius:3px;padding:8px 14px;min-width:120px}
+.hstats b{display:block;font:700 22px/1.2 var(--sans);font-variant-numeric:tabular-nums}
+.hstats span{font-size:12px;color:var(--ink2)}
+.hwrap{overflow-x:auto}
+table.htab{border-collapse:collapse;width:100%;font-size:14px;font-variant-numeric:tabular-nums}
+table.htab th,table.htab td{padding:7px 10px;border-bottom:1px solid var(--line2);text-align:left;vertical-align:top;white-space:nowrap}
+table.htab th{font:700 12px var(--sans);color:var(--ink2);text-transform:uppercase;letter-spacing:.05em}
+table.htab td.sc{white-space:normal;min-width:180px}
+table.htab .btn{padding:4px 10px;font-size:12px}
+.hempty{font-size:14px;color:var(--ink2)}
+.hclear{font-size:12px;color:var(--bad);background:none;border:0;text-decoration:underline;padding:2px}
+.hmore{align-self:flex-start;font-size:13px;padding:5px 12px}
+.secs .btn.did{background:var(--good-soft);border-color:var(--good)}
+.secs .btn .sct{font-size:11px;font-weight:700;color:var(--good);margin-left:4px}
+
 /* ---------- test window ---------- */
 .win{position:fixed;inset:0;display:flex;flex-direction:column;background:var(--paper);z-index:20;padding-top:env(safe-area-inset-top,0px)}
 .topbar{background:var(--bar);color:var(--bar-ink);display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px max(14px,env(safe-area-inset-left,0px)) 8px max(14px,env(safe-area-inset-left,0px));flex-wrap:wrap}
@@ -307,10 +327,93 @@ function removeUpload(id){
   var list=getUploads().filter(function(t){return t.id!==id});
   saveUploadsMeta(list);
   try{localStorage.removeItem("gre-upload-data-"+id)}catch(e){}
+  LS.set("gre-attempts",getAttempts().filter(function(a){return a.tid!==id}));
   clearSession(id);
   delete window.GRE[id];
   rebuildTests();home();
 }
+
+/* ---------- attempt history: every finished full test or section, stored only in this browser ---------- */
+function getAttempts(){
+  var list=LS.get("gre-attempts");
+  if(list)return list;
+  /* first run: bring in full-test scores saved by the older score history */
+  var old=LS.get("gre-hist")||{},out=[];
+  Object.keys(old).forEach(function(n){
+    var l=Array.isArray(old[n])?old[n]:[old[n]];
+    l.forEach(function(a,i){
+      if(!a)return;
+      var d=a.ts?new Date(a.ts):new Date(a.when);
+      out.push({id:a.ts||(+n*1000+i),n:+n,tid:null,title:null,mode:"full",what:"Full test",when:isNaN(d)?"":d.toISOString(),
+        plan:[],secs:[],v:a.v,q:a.q,words:null,noTime:!a.ts,pct:a.total?Math.round(a.correct/a.total*100):null,old:true});
+    });
+  });
+  out.sort(function(x,y){return x.id-y.id});
+  if(out.length)LS.set("gre-attempts",out);
+  return out;
+}
+function whatLabel(t,mode){
+  if(mode==="full")return "Full test";
+  if(mode==="awa")return "Writing";
+  return (t&&t.ord&&t.ord[+mode])||("Section "+(+mode+1));
+}
+function saveAttempt(sections,v,q){
+  var t=TESTS.filter(function(x){return x.n===S.n})[0];
+  var list=getAttempts();
+  list.push({id:Date.now(),n:S.n,tid:S.id,title:(t&&t.title)||null,mode:String(S.mode),what:whatLabel(t,S.mode),
+    when:new Date().toISOString(),plan:S.plan,secs:sections,v:v,q:q,
+    words:S.plan.indexOf("awa")>=0?wordCount(S.awa):null,ans:S.ans,awa:S.awa||""});
+  if(list.length>300)list=list.slice(list.length-300);
+  return LS.set("gre-attempts",list);
+}
+function fmtWhen(iso,dateOnly){
+  var d=new Date(iso);if(isNaN(d))return "";
+  var day=d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
+  return dateOnly?day:day+", "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+}
+function reviewAttempt(id){
+  var a=getAttempts().filter(function(x){return x.id===id})[0];if(!a)return;
+  app.innerHTML='<div class="win"><div class="center"><div class="card"><h2>Loading your attempt...</h2></div></div></div>';
+  loadTest(a.tid,function(D){
+    S={n:a.n,id:a.tid,D:D,mode:a.mode==="full"||a.mode==="awa"?a.mode:+a.mode,plan:a.plan,step:a.plan.length,ans:a.ans||{},marks:{},awa:a.awa||"",qi:0,deadline:0,done:{},review:false,saved:true,when:a.when};
+    results();
+  });
+}
+function histHTML(showAll){
+  var list=getAttempts().slice().reverse();
+  var h='<section class="hist" id="hist"><div class="hh"><h2>Your history</h2>'+(list.length?'<button class="hclear" id="hclear">Clear history</button>':'')+'</div>';
+  if(!list.length)return h+'<p class="hempty">No attempts yet. Every full test or section you finish is saved here with your score, so you can see what you have done and review your answers later.</p></section>';
+  var qc=0,qt=0,vc=0,vt=0,tests={};
+  list.forEach(function(a){tests[a.n]=1;(a.secs||[]).forEach(function(s){if(s.type==="quant"){qc+=s.c;qt+=s.t}else{vc+=s.c;vt+=s.t}})});
+  h+='<div class="hstats"><div><b>'+list.length+'</b><span>Attempts finished</span></div><div><b>'+Object.keys(tests).length+'</b><span>Tests tried</span></div>'+
+    (qt?'<div><b>'+Math.round(qc/qt*100)+'%</b><span>Quant correct ('+qc+'/'+qt+')</span></div>':'')+
+    (vt?'<div><b>'+Math.round(vc/vt*100)+'%</b><span>Verbal correct ('+vc+'/'+vt+')</span></div>':'')+'</div>';
+  var rows=showAll?list:list.slice(0,10);
+  h+='<div class="hwrap"><table class="htab"><thead><tr><th>When</th><th>Test</th><th>What</th><th>Score</th><th></th></tr></thead><tbody>';
+  rows.forEach(function(a){
+    var sc=(a.secs||[]).map(function(s){return esc(s.name)+': <b>'+s.c+'/'+s.t+'</b> ('+Math.round(s.c/s.t*100)+'%)'}).join("<br>");
+    if(a.words!=null)sc+=(sc?'<br>':'')+'Essay: <b>'+a.words+'</b> words';
+    var estim=[];if(a.v)estim.push("V "+a.v);if(a.q)estim.push("Q "+a.q);
+    if(a.mode==="full"&&estim.length)sc+=(sc?'<br>':'')+'Estimate: <b>'+estim.join(" &middot; ")+'</b>';
+    if(a.pct!=null)sc+='<br>Overall: <b>'+a.pct+'%</b>';
+    h+='<tr><td>'+esc(fmtWhen(a.when,a.noTime))+'</td><td>Test '+a.n+(a.title?'<br><span style="font-size:12px;color:var(--ink2)">'+esc(a.title)+'</span>':'')+'</td><td>'+esc(a.what)+'</td><td class="sc">'+(sc||'&mdash;')+'</td><td>'+((a.secs||[]).length||a.words!=null?'<button class="btn" data-rev="'+a.id+'">Review</button>':'')+'</td></tr>';
+  });
+  h+='</tbody></table></div>';
+  if(!showAll&&list.length>10)h+='<button class="btn hmore" id="hmore">Show all '+list.length+' attempts</button>';
+  return h+'</section>';
+}
+function bindHist(){
+  app.querySelectorAll("[data-rev]").forEach(function(b){b.onclick=function(){reviewAttempt(+b.dataset.rev)}});
+  var m=$id("hmore");if(m)m.onclick=function(){var el=$id("hist");el.outerHTML=histHTML(true);bindHist()};
+  var c=$id("hclear");if(c)c.onclick=function(){
+    var d=document.createElement("div");d.className="modal";
+    d.innerHTML='<div class="box"><h3>Clear your history?</h3><p>This deletes every saved attempt and score from this browser. This cannot be undone.</p><div class="acts"><button class="btn" id="no">Cancel</button><button class="btn danger" id="yes">Clear history</button></div></div>';
+    document.body.appendChild(d);
+    d.querySelector("#no").onclick=function(){d.remove()};
+    d.querySelector("#yes").onclick=function(){d.remove();LS.set("gre-attempts",[]);LS.set("gre-hist",{});home()};
+  };
+}
+function $id(x){return document.getElementById(x)}
 
 /* ---------- loading ---------- */
 function loadTest(id,cb){
@@ -355,43 +458,41 @@ function uploadSectionHTML(){
   '</section>';
 }
 function histList(hist,n){var l=hist[n];if(!l)return [];return Array.isArray(l)?l:[l]}
-function buildHistoryDashboard(hist){
-  var rows=[];
-  TESTS.forEach(function(t){
-    histList(hist,t.n).forEach(function(a){
-      rows.push({title:t.title||("Practice Test "+t.n),ts:a.ts||0,when:a.when,v:a.v,q:a.q,pct:(a.total?Math.round((a.correct/a.total)*100):null)});
-    });
-  });
-  if(!rows.length)return "";
-  rows.sort(function(x,y){return y.ts-x.ts});
-  var body=rows.map(function(r){return '<tr><td>'+esc(r.title)+'</td><td>'+esc(r.when)+'</td><td>'+r.v+'</td><td>'+r.q+'</td><td>'+(r.pct!=null?r.pct+'%':'&mdash;')+'</td></tr>'}).join("");
-  return '<section style="margin-bottom:28px"><h2 style="font:600 18px var(--sans);margin-bottom:10px">Score history</h2><div style="overflow-x:auto"><table class="res" style="min-width:480px"><thead><tr><th>Test</th><th>Date</th><th>Verbal est.</th><th>Quant est.</th><th>Overall</th></tr></thead><tbody>'+body+'</tbody></table></div></section>';
-}
 function home(){
   stopTimer();S=null;calcOpen=false;
   rebuildTests();
   var hist=LS.get("gre-hist")||{};
   var h='<main class="home"><h1>My GRE Practice</h1><p class="lede">Your own private copy of the GRE Test Room. Take a full-length test, practice a single section, or upload more tests to build out your own question bank. This page and everything you upload live only in this browser &mdash; nobody else can open it.</p>';
   h+='<div class="rules"><span>Verbal &middot; timed, per section</span><span>Quant &middot; timed, per section</span><span>Writing task &middot; 30 min (where the test includes one)</span><span>Mark &amp; review before time runs out</span></div>';
+  var atts=getAttempts();
+  h+=histHTML(false);
   if(!storageWorks())h+=storageWarningHTML();
   h+=diagnosticsHTML();
   h+=uploadSectionHTML();
-  h+=buildHistoryDashboard(hist);
   h+='<div class="grid">';
   TESTS.forEach(function(t){
     var hl=histList(hist,t.n),l=hl.length?hl[hl.length-1]:null;
+    var mine=atts.filter(function(a){return a.n===t.n});
+    var lastSec={};
+    mine.forEach(function(a){(a.secs||[]).forEach(function(s){lastSec[s.si]=s});if(a.words!=null)lastSec.awa={words:a.words}});
+    var lastFull=mine.filter(function(a){return a.mode==="full"}).pop();
+    var lastAny=mine[mine.length-1];
+    var status=mine.length?'Attempted <b>'+mine.length+'</b> time'+(mine.length>1?'s':'')+', last on '+esc(fmtWhen(lastAny.when,lastAny.noTime))+
+      (lastFull?'<br>Last full test: <b>'+[lastFull.v?'V '+lastFull.v:'',lastFull.q?'Q '+lastFull.q:''].filter(Boolean).join(' &middot; ')+'</b> (estimate)':''):
+      (l?'Last attempt: <b>V '+l.v+' &middot; Q '+l.q+'</b> (estimate), '+esc(l.when):'Not attempted yet');
     var resuming=hasSession(t.id);
     h+='<section class="tcard">'+(t.custom?'<span class="badge">Your upload</span>':'')+'<div class="top"><div><div class="nm">Practice test</div><div class="no">'+t.n+'</div></div></div>'+
     (t.title?'<div class="ttl2">'+esc(t.title)+'</div>':'')+
-    '<div class="last">'+(l?'Last attempt: <b>V '+l.v+' &middot; Q '+l.q+'</b> (estimate), '+esc(l.when):'Not attempted yet')+'</div>'+
+    '<div class="last">'+status+'</div>'+
     (resuming?'<button class="btn primary" data-resume="'+t.n+'">Resume in-progress test</button><button class="btn" style="margin-top:6px" data-start="'+t.n+'">Start over</button>':'<button class="btn primary" data-start="'+t.n+'">Start full test</button>')+
-    '<div><div class="nm" style="margin-bottom:6px">Or practice one section</div><div class="secs">'+(t.awa?'<button class="btn" data-sec="'+t.n+':awa">Writing</button>':'')+t.ord.map(function(o,i){return '<button class="btn" data-sec="'+t.n+':'+i+'">'+esc(o)+'</button>'}).join("")+'</div></div>'+
+    '<div><div class="nm" style="margin-bottom:6px">Or practice one section</div><div class="secs">'+(t.awa?'<button class="btn'+(lastSec.awa?' did':'')+'" data-sec="'+t.n+':awa"'+(lastSec.awa?' title="Done: last essay '+lastSec.awa.words+' words"':'')+'>Writing'+(lastSec.awa?'<span class="sct">&#10003;</span>':'')+'</button>':'')+t.ord.map(function(o,i){var d=lastSec[i];return '<button class="btn'+(d?' did':'')+'" data-sec="'+t.n+':'+i+'"'+(d?' title="Last score '+d.c+' of '+d.t+'"':'')+'>'+esc(o)+(d?'<span class="sct">'+d.c+'/'+d.t+'</span>':'')+'</button>'}).join("")+'</div></div>'+
     '<button class="btn" style="margin-top:8px" data-key="'+t.n+'">View answer key</button>'+
     (t.custom?'<button class="del" data-del="'+t.id+'">Remove this test</button>':'')+
     '</section>';
   });
   h+='</div></main>';
   app.innerHTML=h;
+  bindHist();
   app.querySelectorAll("[data-resume]").forEach(function(b){b.onclick=function(){resumeSession(TESTS.filter(function(x){return x.n===+b.dataset.resume})[0])}});
   app.querySelectorAll("[data-start]").forEach(function(b){b.onclick=function(){
     var n=+b.dataset.start,t=TESTS.filter(function(x){return x.n===n})[0];
@@ -780,12 +881,13 @@ function sectionScore(si){
 function est(c,t){return Math.round(130+(c/t)*40)}
 function results(){
   stopTimer();calcOpen=false;
-  clearSession(S.id);
-  var rows="",vc=0,vt=0,qc=0,qt=0,tried=[];
+  if(!S.when)clearSession(S.id);
+  var rows="",vc=0,vt=0,qc=0,qt=0,tried=[],secs=[];
   S.plan.forEach(function(p){
     if(p==="awa"||p==="break")return;
     var r=sectionScore(p),sec=S.D.sections[p];tried.push(p);
     if(sec.type==="verbal"){vc+=r.c;vt+=r.t}else{qc+=r.c;qt+=r.t}
+    secs.push({si:p,name:sec.name,type:sec.type,c:r.c,t:r.t});
     rows+='<tr><td>'+esc(sec.name)+'</td><td>'+r.c+' / '+r.t+'</td><td>'+Math.round(r.c/r.t*100)+'%</td></tr>';
   });
   var sc="";
@@ -793,8 +895,13 @@ function results(){
   if(qt)sc+='<div><div class="big">'+est(qc,qt)+'</div><div class="cap">Quant estimate</div></div>';
   if(S.plan.indexOf("awa")>=0)sc+='<div><div class="big">'+wordCount(S.awa)+'</div><div class="cap">Essay words</div></div>';
   var histSaved=true;
-  if(S.mode==="full"){var hist=LS.get("gre-hist")||{};hist[S.n]=histList(hist,S.n);hist[S.n].push({v:est(vc,vt),q:est(qc,qt),when:new Date().toLocaleDateString(),ts:Date.now(),correct:vc+qc,total:vt+qt});histSaved=LS.set("gre-hist",hist)&&storageWorks()}
-  var h='<div class="win"><div class="topbar"><div class="ttl">Practice Test '+S.n+' &middot; Results</div><div class="tools"><button id="home">All tests</button></div></div><div class="center"><div class="card"><h2>Test complete</h2>'+(S.mode==="full"&&!histSaved?storageWarningHTML():'')+'<div class="scoreline">'+sc+'</div><p style="font-size:13px;color:var(--ink2)">Score estimates use a simple linear scale from 130 to 170 based on your percent correct. The real GRE adapts the second section to your first, so treat these as a rough guide only.</p>'+
+  /* save once: results() runs again when you close the answer review */
+  if(!S.saved){
+    S.saved=true;
+    histSaved=saveAttempt(secs,vt?est(vc,vt):null,qt?est(qc,qt):null)&&storageWorks();
+    if(S.mode==="full"){var hist=LS.get("gre-hist")||{};hist[S.n]=histList(hist,S.n);hist[S.n].push({v:est(vc,vt),q:est(qc,qt),when:new Date().toLocaleDateString(),ts:Date.now(),correct:vc+qc,total:vt+qt});histSaved=LS.set("gre-hist",hist)&&histSaved}
+  }
+  var h='<div class="win"><div class="topbar"><div class="ttl">Practice Test '+S.n+' &middot; Results</div><div class="tools"><button id="home">All tests</button></div></div><div class="center"><div class="card"><h2>'+(S.when?'Your attempt from '+esc(fmtWhen(S.when)):'Test complete')+'</h2>'+(S.mode==="full"&&!histSaved?storageWarningHTML():'')+'<div class="scoreline">'+sc+'</div><p style="font-size:13px;color:var(--ink2)">Score estimates use a simple linear scale from 130 to 170 based on your percent correct. The real GRE adapts the second section to your first, so treat these as a rough guide only.</p>'+
   (rows?'<table class="res"><thead><tr><th>Section</th><th>Correct</th><th>Percent</th></tr></thead><tbody>'+rows+'</tbody></table>':'')+
   (S.plan.indexOf("awa")>=0?'<h3>Your essay</h3><div class="essay">'+esc(S.awa||"(No essay written)")+'</div><p style="font-size:13px;color:var(--ink2)">The writing task is not machine scored. Compare your essay with the issue prompt in the review.</p>':'')+
   '<p style="margin-top:22px;display:flex;gap:8px;flex-wrap:wrap">'+(tried.length?'<button class="btn primary" id="revans">Review questions and answers</button>':'')+'<button class="btn" id="home2">Back to all tests</button></p></div></div></div>';
