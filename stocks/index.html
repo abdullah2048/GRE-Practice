@@ -71,6 +71,7 @@ th { color: var(--muted); font-weight: 600; }
 const $ = (s) => document.querySelector(s);
 const fmt = (v, d = 2) => v == null ? "–" : Number(v).toLocaleString("en-PK", { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = (v, d = 2) => v == null ? "–" : (v > 0 ? "+" : "") + fmt(v, d) + "%";
+const dayLabel = (iso) => new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 const cls = (v) => v > 0 ? "up" : v < 0 ? "down" : "";
 let chart, data, range = 63;
 
@@ -179,13 +180,15 @@ function render() {
 
   <div class="card section">
     <h2>Live prediction log</h2>
+    <div class="sub" style="margin-bottom:10px">One row per trading day: what was predicted for that day's close, and what actually happened.</div>
     <div class="tablewrap"><table>
-      <thead><tr><th>Made after close of</th><th>Session</th><th>Prev close</th><th>Predicted</th><th>Range</th><th>Actual</th><th>Error</th><th>Direction</th></tr></thead>
+      <thead><tr><th>Trading day</th><th>Predicted close</th><th>Range</th><th>Actual close</th><th>Error</th><th>Direction</th><th>Previous close</th></tr></thead>
       <tbody>${d.live.slice().reverse().map(p => `<tr>
-        <td>${p.based_on}</td><td>${p.date || "pending"}</td><td>${fmt(p.last_close)}</td><td>${fmt(p.pred)}</td>
+        <td>${p.date ? dayLabel(p.date) : `Next trading day <span class="sub">(not traded yet)</span>`}</td><td>${fmt(p.pred)}</td>
         <td>${fmt(p.low)}–${fmt(p.high)}</td><td>${p.actual == null ? "–" : fmt(p.actual)}</td>
         <td>${p.error_pct == null ? "–" : pct(p.error_pct)}</td>
-        <td>${p.actual == null ? "–" : p.direction_hit == null ? "flat" : p.direction_hit ? '<span class="up">✓</span>' : '<span class="down">✗</span>'}</td></tr>`).join("")}</tbody>
+        <td>${p.actual == null ? "–" : p.direction_hit == null ? "flat" : p.direction_hit ? '<span class="up">✓</span>' : '<span class="down">✗</span>'}</td>
+        <td>${fmt(p.last_close)} <span class="sub">(${dayLabel(p.based_on)})</span></td></tr>`).join("")}</tbody>
     </table></div>
   </div>
 
