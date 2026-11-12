@@ -1,0 +1,8 @@
+{
+  "name": "gre-practice-tests",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/functions": "3.11.1"
+  }
+}
