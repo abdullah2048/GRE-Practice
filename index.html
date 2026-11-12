@@ -1,5 +1,5 @@
 <meta charset="UTF-8">
-<title>My GRE Practice</title>
+<title>GRE Practice Tests</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
 <style>
@@ -467,7 +467,7 @@ function home(){
   stopTimer();S=null;calcOpen=false;
   rebuildTests();
   var hist=LS.get("gre-hist")||{};
-  var h='<main class="home"><h1>My GRE Practice</h1><p class="lede">Your own private copy of the GRE Test Room. Take a full-length test, practice a single section, or upload more tests to build out your own question bank. This page and everything you upload live only in this browser &mdash; nobody else can open it.</p>';
+  var h='<main class="home"><h1>GRE Practice Tests</h1><p class="lede">Your own private copy of the GRE Test Room. Take a full-length test, practice a single section, or upload more tests to build out your own question bank. This page and everything you upload live only in this browser &mdash; nobody else can open it.</p>';
   h+='<div class="rules"><span>Verbal &middot; timed, per section</span><span>Quant &middot; timed, per section</span><span>Writing task &middot; 30 min (where the test includes one)</span><span>Mark &amp; review before time runs out</span></div>';
   var atts=getAttempts();
   h+=histHTML(false);
