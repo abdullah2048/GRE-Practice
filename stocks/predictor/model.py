@@ -149,13 +149,15 @@ class Ridge:
     unless the data keeps backing them up. `forget` sets how fast old days fade.
     """
 
-    def __init__(self, d, forget, rho, name):
+    def __init__(self, d, forget, rho, name, rho_intercept=1e-6):
         self.name = name
         self.forget = forget
         self.A = np.zeros((d + 1, d + 1))
         self.b = np.zeros(d + 1)
         self.R = rho * np.eye(d + 1)
-        self.R[-1, -1] = 1e-6  # don't shrink the intercept
+        # The intercept is the built-in daily drift. Tiny = learn it freely;
+        # huge = assume no drift, so forecasts lean neither up nor down by default.
+        self.R[-1, -1] = rho_intercept
         self.w = np.zeros(d + 1)
 
     def predict(self, z):
@@ -278,6 +280,16 @@ CANDIDATES = [
         "name": "Strongly shrunk regression",
         "features": ALL,
         "make": lambda d: [Ridge(d, 0.999, 1000, "Ridge (~3-year memory, strong shrinkage)")],
+    },
+    {
+        "key": "ridge_nodrift_v3",
+        "name": "Shrunk regression, no built-in drift",
+        "features": ALL,
+        "make": lambda d: [
+            Ridge(d, 0.995, 300, "Ridge (~6-month memory, no drift)", rho_intercept=1e9),
+            Ridge(d, 0.999, 300, "Ridge (~3-year memory, no drift)", rho_intercept=1e9),
+            Naive(),
+        ],
     },
 ]
 CHAMPION_WINDOW = 250  # trading days (~1 year) used to compare candidates
