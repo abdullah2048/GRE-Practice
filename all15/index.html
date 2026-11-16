@@ -773,8 +773,8 @@ function questionHTML(q,a,id,rev,two,struck){
   var pre=q.preface||q.header||q.groupNote;
   if(pre)qh+='<p class="note">'+inl(pre)+'</p>';
   if(q.kind==="qc"){
-    if(q.info)qh+='<div class="info">'+inl(q.info)+'</div>';
-    if(q.stem&&q.stem!==q.info)qh+='<div class="info">'+inl(q.stem)+'</div>';
+    if(q.info)qh+='<div class="info">'+inl(q.info).replace(/\n/g,"<br>")+'</div>';
+    if(q.stem&&q.stem!==q.info)qh+='<div class="info">'+inl(q.stem).replace(/\n/g,"<br>")+'</div>';
     qh+='<div class="qc"><div><span class="lab">Quantity A</span>'+inl(q.quantityA)+'</div><div><span class="lab">Quantity B</span>'+inl(q.quantityB)+'</div></div>';
   }else if(q.kind==="blanks"){
     var stem=esc(q.stem).replace(/\[(Blank[^\]]*)\]/gi,'<span class="blank-pill">$1</span>');
