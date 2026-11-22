@@ -793,6 +793,8 @@ function questionHTML(q,a,id,rev,two,struck){
   if(q.uncertain)qh+='<div class="warn">This question was transcribed from a photo and may contain a reading error'+(q.note?' ('+esc(q.note)+')':'')+'.'+(q.images&&q.images.length?' Open the source photo below to check.':'')+'</div>';
   var pre=q.preface||q.header||q.groupNote;
   if(pre)qh+='<p class="note">'+inl(pre)+'</p>';
+  /* a given such as a list of values sits in "info"; qc questions show it below, other kinds show it here unless a figure image already carries it */
+  if(q.kind!=="qc"&&q.info&&!(q.images&&q.images.length))qh+='<div class="info">'+inl(q.info).replace(/\n/g,"<br>")+'</div>';
   if(q.kind==="qc"){
     if(q.info)qh+='<div class="info">'+inl(q.info).replace(/\n/g,"<br>")+'</div>';
     if(q.stem&&q.stem!==q.info)qh+='<div class="info">'+inl(q.stem).replace(/\n/g,"<br>")+'</div>';
